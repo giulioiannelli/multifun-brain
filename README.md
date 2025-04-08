@@ -1,9 +1,9 @@
 # multifun-brain
 
-Brain utilities and examples.
+## installation
 
-## Setup
+### conda environment
 ```bash
-conda env create -f envs/multifun-brain.yml
+conda env create -f multifun-brain.yml
 conda activate multifun-brain
 ```
