@@ -1,5 +1,26 @@
 from .core import *
 
+def rho_matrix(tau, L):
+    """
+    Compute the normalized diffusion kernel (a stochastic matrix) 
+    based on the Laplacian `L` at time scale `tau`.
+
+    Parameters:
+    -----------
+    tau : float
+        Diffusion time scale.
+
+    L : ndarray (n x n)
+        Graph Laplacian matrix (assumed symmetric and positive semi-definite).
+
+    Returns:
+    --------
+    rho : ndarray (n x n)
+        Normalized diffusion matrix with trace 1.
+    """
+    kernel = expm(-tau * L)               # diffusion kernel
+    trace = np.trace(kernel)              # normalization constant
+    return kernel / trace                 # normalized matrix
 
 def entropy(w, steps=600, t1=-2, t2=5):
     """
@@ -38,6 +59,28 @@ def entropy(w, steps=600, t1=-2, t2=5):
     dS = np.log(N) * np.diff(1 - S) / np.diff(np.log(t))
     return 1 - S, dS, VarL, t
 
+
+def symmetrized_inverse_distance(tau, rho_matrix_fn):
+    """
+    Compute a symmetric distance matrix from an input correlation-like matrix.
+
+    Parameters:
+    -----------
+    tau : any
+        Input parameter passed to the `rho_matrix_fn`, typically a time or scale.
+    
+    rho_matrix_fn : callable
+        A function that returns a square matrix (e.g., correlation matrix) given `tau`.
+
+    Returns:
+    --------
+    dists : ndarray
+        Condensed 1D array of the symmetric distance matrix, suitable for clustering methods.
+    """
+    Trho = 1.0 / rho_matrix_fn(tau)
+    Trho = np.maximum(Trho, Trho.T)     # ensure symmetry
+    np.fill_diagonal(Trho, 0)           # zero diagonal (no self-distance)
+    return squareform(Trho)             # convert to condensed form
 
 def compute_optimal_threshold(linkage_matrix, scaling_factor=1):
     """
@@ -88,3 +131,23 @@ def compute_optimal_threshold(linkage_matrix, scaling_factor=1):
 
     return FlatClusteringTh, optimal_threshold, stability_indices, optimal_branch_index
 
+def identify_switching_nodes(partitions, tau_values):
+    """
+    partitions: list of lists of community labels for each node at each τ scale.
+    tau_values: list of τ values corresponding to each partition.
+    
+    Returns a dictionary where each key is a node index (int) that switched communities,
+    and the value is a list of (τ, community) tuples showing its assignment history.
+    Only nodes with more than one unique community label are included.
+    """
+    if not partitions:
+        return {}
+    
+    n_nodes = len(partitions[0])
+    result = {}
+    for node in range(n_nodes):
+        history = [(float(tau_values[i]), int(partitions[i][node])) for i in range(len(tau_values))]
+        # Include node if it is assigned to different communities across τ scales.
+        if len({assignment for _, assignment in history}) > 1:
+            result[node] = history
+    return result
