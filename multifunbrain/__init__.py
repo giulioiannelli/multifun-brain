@@ -3,3 +3,4 @@ from .corrnet import *
 from .generators import *
 from .graphutils import *
 from .lrglib import *
+from .plotlib import *
