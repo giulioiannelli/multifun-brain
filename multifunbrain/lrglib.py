@@ -151,3 +151,86 @@ def identify_switching_nodes(partitions, tau_values):
         if len({assignment for _, assignment in history}) > 1:
             result[node] = history
     return result
+
+def get_moved_nodes(partdict_tau, source_cluster):
+    """
+    partdict_tau: dictionary in which keys are node IDs and values are lists of (τ, cluster) tuples,
+                  e.g., {0: [(0.01, 3), (0.07485, 3), (1.0, 2)], ...}
+    source_cluster: the cluster of interest (the initial cluster in which nodes must be)
+    
+    Returns a dictionary mapping node IDs that start in source_cluster and later move out,
+    with details of the first τ at which they change and what the new cluster is.
+    """
+    moved = {}
+    for node, history in partdict_tau.items():
+        # Only consider nodes that start in the specified source cluster.
+        if history[0][1] == source_cluster:
+            # Look for the first occurrence where the cluster assignment differs.
+            for tau, cluster in history:
+                if cluster != source_cluster:
+                    moved[node] = {"tau_move": tau, "new_cluster": cluster, "history": history}
+                    break  # record the first move only
+    return moved
+
+def get_moved_nodes_interval(partdict_tau, source_cluster, tau_i=None, tau_f=None, tol=1e-3):
+    """
+    partdict_tau: dict mapping node IDs to lists of (τ, cluster) tuples.
+                  Example:
+                    {0: [(0.01, 3), (0.07485, 3), (1.0, 2)], ...}
+    source_cluster: the initial cluster that nodes must have at τ = tau_i.
+    tau_i: initial τ value; if not specified, the first τ value from an arbitrary node is used.
+    tau_f: final τ value; if not specified, the second τ value from an arbitrary node is used.
+    tol: tolerance for matching τ values.
+    
+    Returns a dictionary mapping node IDs that started in source_cluster at tau_i 
+    and then switched to a different cluster by tau_f. For each such node, the returned
+    information includes the cluster at tau_i, the cluster at tau_f, and the full assignment history.
+    """
+    # If tau_i or tau_f is not provided, get them from the first node's history.
+    if tau_i is None or tau_f is None:
+        sample_node = next(iter(partdict_tau))
+        sample_history = partdict_tau[sample_node]
+        if len(sample_history) >= 2:
+            if tau_i is None:
+                tau_i = sample_history[0][0]
+            if tau_f is None:
+                tau_f = sample_history[1][0]
+        else:
+            raise ValueError("Not enough τ values in node history to set defaults.")
+
+    moved = {}
+    for node, history in partdict_tau.items():
+        cluster_i = None
+        cluster_f = None
+        for t, cluster in history:
+            if abs(t - tau_i) < tol:
+                cluster_i = cluster
+            if abs(t - tau_f) < tol:
+                cluster_f = cluster
+        # Only consider nodes that have assignments at both tau_i and tau_f
+        if cluster_i is None or cluster_f is None:
+            continue
+        # Record node if it started in source_cluster at tau_i and then switched by tau_f
+        if cluster_i == source_cluster and cluster_f != source_cluster:
+            moved[node] = {"tau_i_cluster": cluster_i,
+                           "tau_f_cluster": cluster_f,
+                           "history": history}
+    return moved
+
+# Sample usage:
+if __name__ == '__main__':
+    partdict_tau = {
+        0: [(0.01, 3), (0.07485407993726223, 3), (1.0, 2)],
+        1: [(0.01, 5), (0.07485407993726223, 2), (1.0, 3)],
+        2: [(0.01, 3), (0.07485407993726223, 3), (1.0, 4)],
+        3: [(0.01, 3), (0.07485407993726223, 3), (1.0, 4)],
+        4: [(0.01, 5), (0.07485407993726223, 2), (1.0, 1)]
+    }
+    
+    # Example: get nodes that started in cluster 3 at the first τ (default tau_i=0.01)
+    # and by the second τ (default tau_f=0.07485) have switched to a different cluster.
+    source_cluster = 3
+    moved_nodes = get_moved_nodes_interval(partdict_tau, source_cluster)
+    for node, data in moved_nodes.items():
+        print(f"Node {node}: started in cluster {data['tau_i_cluster']} at τ = {data['history'][0][0]} and switched to cluster {data['tau_f_cluster']} at τ = {data['history'][1][0]}")
+        print(f"  Full history: {data['history']}")
