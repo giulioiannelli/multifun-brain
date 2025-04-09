@@ -196,7 +196,6 @@ def select_threshold_fraction(Th: np.ndarray, Pinf: np.ndarray, drop_frac: float
             return Th[i]
     return Th[-1]
 
-
 def select_threshold_plateau(Th: np.ndarray, Pinf: np.ndarray, tol: float = 0.01) -> float:
     """
     Select the largest threshold such that Pinf remains within `tol` of its maximum.
@@ -235,3 +234,13 @@ def compute_normalized_linkage(dists, G, method="average", labelList: str = "nam
     # Recompute the linkage matrix using normalized distances.
     linkage_matrix = linkage(dists / tmax, method)
     return linkage_matrix, label_list, tmax
+
+def compute_optimal_threshold_std(merge_distances):
+    diffs = np.diff(merge_distances)
+    print("diffs", diffs)
+    
+    max_gap_index = np.argmax(diffs)
+    print("max_gap_index", max_gap_index)
+    
+    optimal_threshold = (merge_distances[max_gap_index] + merge_distances[max_gap_index + 1]) / 2
+    return optimal_threshold
