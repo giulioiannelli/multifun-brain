@@ -546,3 +546,49 @@ def generate_hierarchical_modular_pa(
         modules = new_modules
 
     return G
+
+def generate_hierarchical_modular_network(num_hierarchies, modules_per_hierarchy, nodes_per_module):
+    """
+    num_hierarchies: integer, number of hierarchical layers (levels)
+    modules_per_hierarchy: list or tuple of length num_hierarchies 
+        indicating how many modules each hierarchy should have
+    nodes_per_module: list or tuple of length num_hierarchies 
+        indicating how many nodes each module should have in that hierarchy
+
+    Returns a NetworkX Graph with a simple hierarchical modular structure:
+      1) Each hierarchy h has (modules_per_hierarchy[h]) modules.
+      2) Each module is a complete subgraph of (nodes_per_module[h]) new nodes.
+      3) Modules in hierarchy h connect to the corresponding module in hierarchy (h+1) by a single edge (example scheme).
+    """
+    G = nx.Graph()
+    current_node_id = 0
+
+    # Keep track of the "module representative" to connect across hierarchies
+    # For each hierarchy, store a list of one representative node per module
+    representatives = []
+
+    for h in range(num_hierarchies):
+        reps_in_this_hierarchy = []
+        for mod in range(modules_per_hierarchy[h]):
+            module_nodes = range(current_node_id, current_node_id + nodes_per_module[h])
+            # Add nodes
+            for n in module_nodes:
+                G.add_node(n, hierarchy=h, module=mod)
+            # Fully connect nodes in the module
+            for i in module_nodes:
+                for j in module_nodes:
+                    if i < j:
+                        G.add_edge(i, j)
+            # Pick the first node as a "representative" for cross-hierarchy connections
+            reps_in_this_hierarchy.append(module_nodes[0])
+            current_node_id += nodes_per_module[h]
+        representatives.append(reps_in_this_hierarchy)
+
+        # Connect modules of this hierarchy to modules of the previous one (if h>0)
+        if h > 0:
+            # Example scheme: connect each module to the "same index" module in the previous hierarchy
+            for mod_idx, rep in enumerate(reps_in_this_hierarchy):
+                prev_rep = representatives[h-1][mod_idx % len(representatives[h-1])]
+                G.add_edge(rep, prev_rep)
+
+    return G
