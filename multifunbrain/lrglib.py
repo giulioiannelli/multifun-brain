@@ -216,21 +216,3 @@ def get_moved_nodes_interval(partdict_tau, source_cluster, tau_i=None, tau_f=Non
                            "tau_f_cluster": cluster_f,
                            "history": history}
     return moved
-
-# Sample usage:
-if __name__ == '__main__':
-    partdict_tau = {
-        0: [(0.01, 3), (0.07485407993726223, 3), (1.0, 2)],
-        1: [(0.01, 5), (0.07485407993726223, 2), (1.0, 3)],
-        2: [(0.01, 3), (0.07485407993726223, 3), (1.0, 4)],
-        3: [(0.01, 3), (0.07485407993726223, 3), (1.0, 4)],
-        4: [(0.01, 5), (0.07485407993726223, 2), (1.0, 1)]
-    }
-    
-    # Example: get nodes that started in cluster 3 at the first τ (default tau_i=0.01)
-    # and by the second τ (default tau_f=0.07485) have switched to a different cluster.
-    source_cluster = 3
-    moved_nodes = get_moved_nodes_interval(partdict_tau, source_cluster)
-    for node, data in moved_nodes.items():
-        print(f"Node {node}: started in cluster {data['tau_i_cluster']} at τ = {data['history'][0][0]} and switched to cluster {data['tau_f_cluster']} at τ = {data['history'][1][0]}")
-        print(f"  Full history: {data['history']}")
