@@ -9,5 +9,5 @@ conda activate multifun-brain
 ```
 ### `pip` installation of multifun-brain
 ```
-pip install -e .
+pip install -e . 
 ```

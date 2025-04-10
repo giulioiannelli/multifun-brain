@@ -3,7 +3,7 @@ from .shared import *
 def hello_brain(name):
     return f"Hello, {name}! Welcome to multifun-brain."
 
-def bandpass_filter(data, low, high, fs=1, order=4, btype='band'):
+def band_filter(data, low, high, fs=1, order=4, btype='bandpass'):
     nyq = 0.5 * fs
     low_norm = low / nyq
     high_norm = high / nyq

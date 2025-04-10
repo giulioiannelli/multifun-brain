@@ -250,7 +250,7 @@ def generate_brain_timeseries_3(
     for size in region_sizes:
         # Shared base: band-limited noise (e.g., 1-30 Hz like EEG)
         raw_noise = rng.normal(0, 1, size=n_timepoints)
-        base_signal = bandpass_filter(raw_noise, 1, 30, fs=sampling_rate)
+        base_signal = band_filter(raw_noise, 1, 30, fs=sampling_rate)
 
         # Normalize base
         base_signal = (base_signal - np.mean(base_signal)) / np.std(base_signal)
@@ -299,7 +299,7 @@ def generate_brain_timeseries_4(
     for region_idx, size in enumerate(region_sizes):
         # Shared base signal for the region
         raw_noise = rng.normal(0, 1, size=n_timepoints)
-        base_signal = bandpass_filter(raw_noise, 1, 30, fs=sampling_rate)
+        base_signal = band_filter(raw_noise, 1, 30, fs=sampling_rate)
         base_signal = (base_signal - np.mean(base_signal)) / np.std(base_signal)
 
         for _ in range(size):
@@ -356,7 +356,7 @@ def generate_brain_timeseries_5(
     for size in region_sizes:
         # Shared base: band-limited noise (e.g., 1-30 Hz like EEG)
         raw_noise = rng.normal(0, 1, size=n_timepoints)
-        base_signal = bandpass_filter(raw_noise, 1, 30, fs=sampling_rate)
+        base_signal = band_filter(raw_noise, 1, 30, fs=sampling_rate)
 
         # Normalize base
         base_signal = (base_signal - np.mean(base_signal)) / np.std(base_signal)
