@@ -1,4 +1,7 @@
-from .shared import *
+"""Core helper functions for :mod:`multifunbrain`."""
+
+import numpy as np
+from scipy.signal import butter, filtfilt
 
 def hello_brain(name):
     return f"Hello, {name}! Welcome to multifun-brain."

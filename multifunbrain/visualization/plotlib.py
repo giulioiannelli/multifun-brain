@@ -1,3 +1,5 @@
+"""Plotting utilities for :mod:`multifunbrain`."""
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Polygon
 import plotly.graph_objects as go

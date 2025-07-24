@@ -1,4 +1,10 @@
-from .core import *
+"""Graph generation utilities for the :mod:`multifunbrain` package."""
+
+import random
+import numpy as np
+import networkx as nx
+
+from ..core import band_filter
 
 def generate_hmn(levels=3, base_module_size=4, p_in=1.0, p_out=0.05, seed=None):
     """

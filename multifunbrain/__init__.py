@@ -1,6 +1,15 @@
-from .core import *
-from .corrnet import *
-from .generators import *
-from .graphutils import *
-from .lrglib import *
-from .plotlib import *
+"""Utility package for brain network analysis."""
+
+from . import core
+from .generation import generators
+from .analysis import corrnet, graphutils, lrglib
+from .visualization import plotlib
+
+__all__ = [
+    "core",
+    "generators",
+    "corrnet",
+    "graphutils",
+    "lrglib",
+    "plotlib",
+]
