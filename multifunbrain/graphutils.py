@@ -1,5 +1,7 @@
 from .core import *
 
+from networkx import Graph
+
 def get_giant_component(G, strongly=False):
     """
     Returns the subgraph corresponding to the giant component of a graph.
@@ -151,6 +153,104 @@ def compute_threshold_stats(G0: nx.Graph) -> Tuple[np.ndarray, np.ndarray, np.nd
             Einf[i] = len(giant.edges()) / E0
     return Th, Einf, Pinf
 
+def compute_threshold_stats_fast(G0: Graph, n_points: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Fast computation of threshold values and connectivity statistics using Union-Find.
+    
+    This is an optimized version that uses Union-Find data structure for efficient
+    connected component computation, especially beneficial for large graphs.
+
+    Parameters
+    ----------
+    G0 : Graph
+        A weighted graph (assumed to be the largest connected component) where each edge 
+        has a "weight" attribute.
+    n_points : int, optional
+        Number of threshold points to compute. If 0, uses the number of nodes in G0.
+
+    Returns
+    -------
+    Th : np.ndarray
+        Array of threshold values.
+    Einf : np.ndarray
+        Array of fractions of edges in the giant component at each threshold.
+    Pinf : np.ndarray
+        Array of fractions of nodes in the giant component at each threshold.
+    """
+    # Pre-compute all edge data
+    edges_data = [(u, v, data["weight"]) for u, v, data in G0.edges(data=True)]
+    weights = np.array([w for _, _, w in edges_data])
+    
+    # Create node mapping for Union-Find
+    nodes = list(G0.nodes())
+    node_to_idx = {node: i for i, node in enumerate(nodes)}
+    n_nodes = len(nodes)
+    
+    n_points = n_points or n_nodes
+    Th = np.logspace(np.log10(weights.min()), np.log10(weights.max()), n_points)
+    Pinf = np.zeros(len(Th))
+    Einf = np.zeros(len(Th))
+    
+    E0 = len(edges_data)
+    
+    # Sort edges by weight (descending) for efficient processing
+    edge_indices = np.argsort(weights)[::-1]
+    sorted_edges = [(edges_data[i][0], edges_data[i][1], weights[i]) for i in edge_indices]
+    
+    for i, threshold in enumerate(Th):
+        # Union-Find implementation
+        parent = list(range(n_nodes))
+        rank = [0] * n_nodes
+        component_size = [1] * n_nodes
+        
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])
+            return parent[x]
+        
+        def union(x, y):
+            px, py = find(x), find(y)
+            if px == py:
+                return
+            if rank[px] < rank[py]:
+                px, py = py, px
+            parent[py] = px
+            component_size[px] += component_size[py]
+            if rank[px] == rank[py]:
+                rank[px] += 1
+        
+        # Add edges above threshold
+        valid_edge_count = 0
+        for u, v, w in sorted_edges:
+            if w >= threshold:
+                union(node_to_idx[u], node_to_idx[v])
+                valid_edge_count += 1
+            else:
+                break  # Since edges are sorted by weight, we can break early
+        
+        if valid_edge_count == 0:
+            Pinf[i] = 0
+            Einf[i] = 0
+        else:
+            # Find the largest component
+            max_component_size = max(component_size[find(j)] for j in range(n_nodes))
+            
+            # Count edges in the largest component
+            giant_root = None
+            for j in range(n_nodes):
+                if component_size[find(j)] == max_component_size:
+                    giant_root = find(j)
+                    break
+            
+            giant_nodes = {nodes[j] for j in range(n_nodes) if find(j) == giant_root}
+            giant_edges = sum(1 for u, v, w in edges_data 
+                            if w >= threshold and u in giant_nodes and v in giant_nodes)
+            
+            Pinf[i] = max_component_size / n_nodes
+            Einf[i] = giant_edges / E0
+    
+    return Th, Einf, Pinf
+
 def select_threshold_elbow(Th: np.ndarray, Pinf: np.ndarray) -> float:
     """
     Select threshold at the point of steepest decline in Pinf (elbow method).
@@ -244,3 +344,10 @@ def compute_optimal_threshold_std(merge_distances):
     
     optimal_threshold = (merge_distances[max_gap_index] + merge_distances[max_gap_index + 1]) / 2
     return optimal_threshold
+
+
+def find_threshold_jumps(G_filt):
+    Th, Einf, Pinf = compute_threshold_stats_fast(G_filt)
+    Pinf_diff = np.diff(Pinf)
+    jumps = np.where(Pinf_diff != 0)[0]
+    return Th, jumps
