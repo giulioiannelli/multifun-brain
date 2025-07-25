@@ -1,4 +1,6 @@
-from .core import *
+"""Simple correlation network helpers."""
+
+import numpy as np
 
 
 def compute_correlation_matrix(timeseries):

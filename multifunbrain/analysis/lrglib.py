@@ -1,4 +1,8 @@
-from .core import *
+"""Linear regression and graph diffusion utilities."""
+
+import numpy as np
+from scipy.linalg import expm
+from scipy.spatial.distance import squareform
 
 def rho_matrix(tau, L):
     """
