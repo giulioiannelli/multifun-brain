@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multifunbrain"
+version = "0.1.0"
+description = "Tools for generating and analyzing hierarchical modular brain networks"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name="Unknown"}]
+dependencies = [
+    "numpy",
+    "scipy",
+    "networkx",
+    "matplotlib",
+    "nilearn",
+    "plotly",
+]
+
+[project.urls]
+Homepage = "https://example.com"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["multifunbrain*"]
+
