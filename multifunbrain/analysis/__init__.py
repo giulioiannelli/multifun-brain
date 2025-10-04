@@ -1,6 +1,10 @@
 """Analysis routines for brain graphs."""
 
-from .corrnet import compute_correlation_matrix
+from .corrnet import (
+    compute_correlation_matrix,
+    marchenko_pastur,
+    marchenko_pastur_density,
+)
 from .graphutils import (
     get_giant_component,
     get_giant_component_leftoff,
@@ -24,6 +28,8 @@ from .lrglib import (
 
 __all__ = [
     "compute_correlation_matrix",
+    "marchenko_pastur",
+    "marchenko_pastur_density",
     "get_giant_component",
     "get_giant_component_leftoff",
     "build_correlation_network",
