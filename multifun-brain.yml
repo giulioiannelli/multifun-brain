@@ -6,7 +6,7 @@ dependencies:
   - numpy
   - scipy
   - networkx
-  - jupyterlab
-  - ipykernel
-  - plotly
+  - matplotlib
   - pip
+  - pip:
+      - "-e .[dev,viz]"

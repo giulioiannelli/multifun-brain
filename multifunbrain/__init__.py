@@ -1,15 +1,23 @@
-"""Utility package for brain network analysis."""
+"""Utility package for hierarchical modular brain network analysis."""
 
-from . import core
-from .generation import generators
-from .analysis import corrnet, graphutils, lrglib
-from .visualization import plotlib
+from __future__ import annotations
+
+from importlib.metadata import PackageNotFoundError, version
+
+from . import analysis, generation, visualization
+from .core import band_filter, hello_brain, marchenko_pastur_density
+
+try:  # pragma: no cover - fallback when package metadata is unavailable
+    __version__ = version("multifunbrain")
+except PackageNotFoundError:  # pragma: no cover - local editable installs
+    __version__ = "0.2.0"
 
 __all__ = [
-    "core",
-    "generators",
-    "corrnet",
-    "graphutils",
-    "lrglib",
-    "plotlib",
+    "analysis",
+    "band_filter",
+    "generation",
+    "hello_brain",
+    "marchenko_pastur_density",
+    "visualization",
+    "__version__",
 ]
