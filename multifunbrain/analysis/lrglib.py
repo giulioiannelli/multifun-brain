@@ -1,8 +1,41 @@
 """Linear regression and graph diffusion utilities."""
 
 import numpy as np
+import networkx as nx
 from scipy.linalg import expm
 from scipy.spatial.distance import squareform
+
+def graph_laplacian_and_spectrum(graph, weight="weight", normalized=False):
+    """
+    Assemble the graph Laplacian and its spectrum from a NetworkX graph.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        Input graph whose Laplacian should be evaluated.
+    weight : str or None, optional
+        Edge attribute to use as weight. Pass ``None`` for unweighted graphs.
+    normalized : bool, optional
+        If ``True`` use the symmetric normalized Laplacian, otherwise the combinatorial Laplacian.
+
+    Returns
+    -------
+    L : np.ndarray
+        Dense Laplacian matrix with nodes ordered as ``graph.nodes()``.
+    spectrum : np.ndarray
+        Eigenvalues of ``L`` sorted in ascending order.
+    """
+    if graph.number_of_nodes() == 0:
+        return np.zeros((0, 0), dtype=float), np.array([], dtype=float)
+
+    if normalized:
+        laplacian = nx.normalized_laplacian_matrix(graph, weight=weight)
+    else:
+        laplacian = nx.laplacian_matrix(graph, weight=weight)
+
+    L = laplacian.astype(float).toarray()
+    spectrum = np.linalg.eigvalsh(L)
+    return L, spectrum
 
 def rho_matrix(tau, L):
     """

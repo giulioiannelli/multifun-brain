@@ -15,8 +15,11 @@ from .graphutils import (
     select_threshold_plateau,
     compute_normalized_linkage,
     compute_optimal_threshold_std,
+    compute_threshold_stats_fast,
+    find_threshold_jumps
 )
 from .lrglib import (
+    graph_laplacian_and_spectrum,
     rho_matrix,
     entropy,
     symmetrized_inverse_distance,
@@ -27,6 +30,7 @@ from .lrglib import (
 )
 
 __all__ = [
+    "graph_laplacian_and_spectrum",
     "compute_correlation_matrix",
     "marchenko_pastur",
     "marchenko_pastur_density",
@@ -34,6 +38,8 @@ __all__ = [
     "get_giant_component_leftoff",
     "build_correlation_network",
     "compute_threshold_stats",
+    "compute_threshold_stats_fast",
+    "find_threshold_jumps",
     "select_threshold_elbow",
     "select_threshold_fraction",
     "select_threshold_plateau",

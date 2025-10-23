@@ -1,5 +1,11 @@
 """Visualisation helpers."""
 
-from .plotlib import plot_entropy_and_C
+from . import plotlib
+from .plotlib import plot_entropy_and_C, plot_sankey, plot_sankey_matplotlib
 
-__all__ = ["plot_entropy_and_C"]
+__all__ = [
+    "plotlib",
+    "plot_entropy_and_C",
+    "plot_sankey_matplotlib",
+    "plot_sankey",
+]

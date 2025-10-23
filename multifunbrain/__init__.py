@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from . import analysis, generation, visualization
+from . import analysis, generation, notebook, visualization
 from .core import band_filter, hello_brain, marchenko_pastur_density
 
 try:  # pragma: no cover - fallback when package metadata is unavailable
@@ -17,6 +17,7 @@ __all__ = [
     "band_filter",
     "generation",
     "hello_brain",
+    "notebook",
     "marchenko_pastur_density",
     "visualization",
     "__version__",
