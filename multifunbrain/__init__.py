@@ -6,6 +6,15 @@ from importlib.metadata import PackageNotFoundError, version
 
 from . import analysis, generation, notebook, visualization
 from .core import band_filter, hello_brain, marchenko_pastur_density
+from .pipeline import (
+    PipelineConfig,
+    PipelineResult,
+    discover_matrices,
+    load_results,
+    run_pipeline,
+    run_pipeline_batch,
+    run_pipeline_directory,
+)
 
 try:  # pragma: no cover - fallback when package metadata is unavailable
     __version__ = version("multifunbrain")
@@ -20,5 +29,12 @@ __all__ = [
     "notebook",
     "marchenko_pastur_density",
     "visualization",
+    "PipelineConfig",
+    "PipelineResult",
+    "discover_matrices",
+    "load_results",
+    "run_pipeline",
+    "run_pipeline_batch",
+    "run_pipeline_directory",
     "__version__",
 ]

@@ -43,3 +43,10 @@ from sklearn.metrics.cluster import contingency_matrix
 
 from multifunbrain.analysis import *
 from multifunbrain.visualization.plotlib import *
+from multifunbrain.pipeline import (
+    PipelineConfig as PipelineConfig,
+    load_results as load_results,
+    run_pipeline as run_pipeline,
+    run_pipeline_batch as run_pipeline_batch,
+    run_pipeline_directory as run_pipeline_directory,
+)

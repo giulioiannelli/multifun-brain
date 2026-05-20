@@ -69,32 +69,49 @@ pytest
 
 ## Quick start
 
-```python
-import numpy as np
+### Analyse correlation matrices from the command line
 
-from multifunbrain.generation import generate_hmn
-from multifunbrain.analysis import corrnet
+```bash
+# Single matrix
+multifunbrain analyze data/correlation_matrices/my_matrix.pkl --no-lrg
 
-# Build a hierarchical modular network with 3 levels of hierarchy
-G = generate_hmn(levels=3, base_module_size=8, p_in=0.9, p_out=0.05, seed=42)
+# All matrices in a directory (recursive)
+multifunbrain analyze data/correlation_matrices/ --pattern Bold --no-lrg
 
-# Create a synthetic multichannel time series and compute pairwise correlations
-signals = np.random.default_rng(42).normal(size=(G.number_of_nodes(), 500))
-corr_matrix = corrnet.compute_correlation_matrix(signals)
-
-# Extract the Marchenko-Pastur density for eigenvalue analysis
-evals = np.linalg.eigvalsh(corr_matrix)
-mp_density = corrnet.marchenko_pastur_density(evals, gamma=0.5)
+# With Marchenko-Pastur validation
+multifunbrain analyze data/correlation_matrices/ --gamma 0.19 -o results/
 ```
 
-Prefer the command line? Use the `multifunbrain` executable after installation:
+### Or from Python / Jupyter
+
+```python
+from multifunbrain.pipeline import run_pipeline, load_results, PipelineConfig
+from multifunbrain.visualization import plot_pipeline_summary
+
+# Run pipeline on a single matrix
+result = run_pipeline(
+    "data/correlation_matrices/my_matrix.pkl",
+    config=PipelineConfig(filter_methods=["absolute", "positive"], run_lrg=False),
+)
+
+# Load results from a previous CLI run
+results = load_results("pipeline_results/")
+results.summary_table()          # comparison DataFrame
+r = results[0]
+fig, axes = plot_pipeline_summary(r)  # 6-panel overview figure
+```
+
+The pipeline runs three analysis sections:
+
+1. **Descriptive analysis** of the raw signed correlation network
+2. **Network filtering** to produce unsigned tractable networks
+3. **Standard metrics + LRG multiscale** on each filtered network
+
+### Synthetic data generation
 
 ```bash
 multifunbrain generate-hmn --levels 3 --base-module-size 8 --p-in 0.9 --p-out 0.05 --seed 42
 ```
-
-The command prints summary statistics to standard output and can optionally dump
-the network to GraphML for further analysis.
 
 ## Documentation
 
@@ -117,17 +134,23 @@ mkdocs serve
 ## Project layout
 
 ```
-multifunbrain/             # Installable Python package
-├── analysis/              # Graph and signal processing utilities
-├── generation/            # Synthetic network and time-series generators
-├── visualization/         # Matplotlib/Plotly-based helpers
-├── cli.py                 # Portable command-line interface entry point
-├── core.py                # Shared core utilities
-└── py.typed               # Enables type checking for consumers
+multifunbrain/              # Installable Python package
+├── analysis/               # Graph and signal processing utilities
+│   ├── corrmatrix.py       #   I/O, matrix prep, denoising, LRG clustering
+│   ├── descriptive.py      #   Signed network characterisation (Section 1)
+│   ├── filtering.py        #   Network filtering / reduction (Section 2)
+│   └── netmetrics.py       #   Standard network metrics (Section 3)
+├── generation/             # Synthetic network and time-series generators
+├── visualization/          # Matplotlib/Plotly-based helpers
+│   └── plotlib/            #   Pipeline plots, Sankey, entropy, colorbars
+├── pipeline.py             # Three-section pipeline orchestration
+├── cli.py                  # Command-line interface (analyze, generate-hmn)
+└── core.py                 # Shared core utilities
 
-notebooks/                 # Example Jupyter notebooks
-test/                      # Legacy exploratory scripts kept for parity
-docs/                      # Markdown documentation rendered by MkDocs
+notebooks/                  # Jupyter notebooks (00_full_pipeline_demo.ipynb)
+test/                       # Unit and integration tests (62 tests)
+docs/                       # Markdown documentation rendered by MkDocs
+data/                       # Correlation matrices from collaborators
 ```
 
 ## Contributing
