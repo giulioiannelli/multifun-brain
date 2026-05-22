@@ -8,11 +8,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from multifunbrain.analysis.corrmatrix import (
+from multifunbrain.analysis.partition import (
     adjusted_rand_index,
     compare_partition_sets,
+)
+from multifunbrain.io import load_correlation_matrix
+from multifunbrain.preprocessing import (
     detect_dead_regions,
-    load_correlation_matrix,
     marchenko_pastur_denoise,
     prepare_correlation_matrix,
 )
