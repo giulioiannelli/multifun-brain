@@ -1,16 +1,26 @@
-"""Multiscale LRG visualisation primitives.
+"""LRG multiscale plots.
 
-Each helper takes a :class:`MultiscaleResult` (or a pair of them) and an
-optional ``ax``. Returns ``(fig, ax)`` so it composes with
-:func:`plot_results_grid`. All decorations are kept compact so the same
-helper renders cleanly both as a stand-alone figure and as a sub-panel.
+Combines the per-result LRG plots (operate on
+:class:`~multifunbrain.pipeline.PipelineResult`) and the multiscale
+plots (operate on
+:class:`~multifunbrain.pipeline.multiscale.MultiscaleResult`).
+
+Per-result plots (Section 3 of the per-matrix pipeline):
+    plot_lrg_entropy, plot_lrg_dendrogram, plot_lrg_psi,
+    plot_lrg_partition_network, plot_lrg_sankey.
+
+Multiscale plots (one or two MultiscaleResults):
+    plot_specific_heat, plot_specific_heat_overlay,
+    plot_dendrogram_with_psi, plot_psi_curve, plot_rmi_curve,
+    plot_partition_flow, plot_tanglegram, plot_metastable_overlay.
 """
 
 from __future__ import annotations
 
-import matplotlib.axes
-import matplotlib.figure
+from typing import TYPE_CHECKING
+
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram
 
@@ -19,21 +29,252 @@ from ...analysis.lrg.compare import (
     specific_heat_comparison,
 )
 from ...pipeline.multiscale import MultiscaleResult
+from ..style import FIGSIZE, PALETTES
+from ._helpers import _nearest_tau_index, _network_layout, _resolve_filter
+
+if TYPE_CHECKING:
+    import matplotlib.axes
+    import matplotlib.figure
+
+    from ...pipeline import PipelineResult
 
 __all__ = [
-    "plot_specific_heat",
-    "plot_specific_heat_overlay",
     "plot_dendrogram_with_psi",
+    "plot_lrg_dendrogram",
+    "plot_lrg_entropy",
+    "plot_lrg_partition_network",
+    "plot_lrg_psi",
+    "plot_lrg_sankey",
+    "plot_metastable_overlay",
+    "plot_partition_flow",
     "plot_psi_curve",
     "plot_rmi_curve",
-    "plot_partition_flow",
+    "plot_specific_heat",
+    "plot_specific_heat_overlay",
     "plot_tanglegram",
-    "plot_metastable_overlay",
 ]
 
 
-def _nearest_tau_index(tau_grid: np.ndarray, tau_value: float) -> int:
-    return int(np.argmin(np.abs(np.asarray(tau_grid) - tau_value)))
+# ──────────────────────────────────────────────────────────────────────
+# Per-result LRG plots (one PipelineResult)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def plot_lrg_entropy(
+    result: PipelineResult,
+    filter_name: str | None = None,
+    *,
+    ax: matplotlib.axes.Axes | None = None,
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+    """Entropy (1-S) and specific heat (C) on dual y-axes.
+
+    Recomputes the Laplacian spectrum from the stored filtered graph,
+    then calls :func:`multifunbrain.analysis.lrg.kernel.entropy`.
+
+    Returns
+    -------
+    (fig, ax)
+    """
+    from ...analysis.lrg.kernel import entropy as lrg_entropy
+    from ...analysis.lrg.kernel import graph_laplacian_and_spectrum
+    from .entropy import plot_entropy_and_C
+
+    fname = _resolve_filter(result, filter_name)
+    G = result.filtered_networks[fname]["graph"]
+    _, spectrum = graph_laplacian_and_spectrum(G, normalized=True)
+
+    Sm1, dS, _varL, t = lrg_entropy(spectrum)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 4))
+    else:
+        fig = ax.get_figure()
+
+    plot_entropy_and_C(ax, t, Sm1, dS)
+    ax.set_title(f"LRG entropy & specific heat ({fname})")
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_lrg_dendrogram(
+    result: PipelineResult,
+    filter_name: str | None = None,
+    tau_index: int = -1,
+    *,
+    ax: matplotlib.axes.Axes | None = None,
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+    """Dendrogram from LRG hierarchical clustering.
+
+    Draws the dendrogram for the partition at ``tau_index`` and a
+    horizontal line at the flat clustering threshold.
+
+    Returns
+    -------
+    (fig, ax)
+    """
+    fname = _resolve_filter(result, filter_name)
+    parts = result.lrg_results.get(fname)
+    if not parts:
+        raise ValueError(f"No LRG results for filter '{fname}'.")
+
+    entry = parts[tau_index]
+    Z = entry["linkage_matrix"]
+    threshold = entry["flat_threshold"]
+    tau = entry["tau"]
+
+    if ax is None:
+        # Template: DENDROGRAM uses a wide figure so leaf labels fit.
+        fig, ax = plt.subplots(figsize=(12, FIGSIZE["wide"][1] + 1))
+    else:
+        fig = ax.get_figure()
+
+    dendrogram(Z, ax=ax, color_threshold=threshold, leaf_font_size=6)
+    # The cut indicator uses the Material "danger" colour from the
+    # central palette so every dendrogram in the project is visually
+    # consistent.
+    ax.axhline(threshold,
+               color=PALETTES["material"]["danger_light"],
+               linestyle="--", linewidth=1.2,
+               label=f"threshold={threshold:.3f}")
+    ax.set_xlabel("Node")
+    ax.set_ylabel("Distance")
+    n_clusters = len(np.unique(entry["partition"]))
+    ax.set_title(f"LRG dendrogram ({fname}, tau={tau:.3g}, {n_clusters} clusters)")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_lrg_psi(
+    result: PipelineResult,
+    filter_name: str | None = None,
+    tau_index: int = -1,
+    *,
+    ax: matplotlib.axes.Axes | None = None,
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+    """Partition Stability Index (PSI) vs branch index.
+
+    Recomputes PSI from the stored linkage matrix and marks the
+    optimal branch.
+
+    Returns
+    -------
+    (fig, ax)
+    """
+    from ...analysis.lrg.partitions import compute_optimal_threshold
+
+    fname = _resolve_filter(result, filter_name)
+    parts = result.lrg_results.get(fname)
+    if not parts:
+        raise ValueError(f"No LRG results for filter '{fname}'.")
+
+    entry = parts[tau_index]
+    Z = entry["linkage_matrix"]
+    tau = entry["tau"]
+
+    _, _, stability_indices, optimal_idx = compute_optimal_threshold(Z)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 4))
+    else:
+        fig = ax.get_figure()
+
+    ax.bar(np.arange(len(stability_indices)), stability_indices,
+           color="#5C6BC0", edgecolor="k", linewidth=0.3)
+    ax.axvline(optimal_idx, color="#F44336", linestyle="--", linewidth=1.2,
+               label=f"optimal branch={optimal_idx}")
+    ax.set_xlabel("Branch index")
+    ax.set_ylabel("Stability index")
+    ax.set_title(f"Partition Stability Index ({fname}, tau={tau:.3g})")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_lrg_partition_network(
+    result: PipelineResult,
+    filter_name: str | None = None,
+    tau_index: int = -1,
+    *,
+    ax: matplotlib.axes.Axes | None = None,
+    figsize: tuple[float, float] = (10, 10),
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+    """Network with nodes colored by LRG partition.
+
+    Uses the partition at ``tau_index`` from the LRG results for the
+    given filter.
+
+    Returns
+    -------
+    (fig, ax)
+    """
+    fname = _resolve_filter(result, filter_name)
+    parts = result.lrg_results.get(fname)
+    if not parts:
+        raise ValueError(f"No LRG results for filter '{fname}'.")
+
+    entry = parts[tau_index]
+    partition = entry["partition"]
+    tau = entry["tau"]
+    G = result.filtered_networks[fname]["graph"]
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.get_figure()
+
+    pos = _network_layout(G)
+    nodes = list(G.nodes())
+
+    cmap = plt.cm.tab20
+    node_colors = [cmap(int(partition[i]) % 20) for i, _ in enumerate(nodes)]
+
+    nx.draw_networkx_nodes(G, pos, ax=ax, node_size=60, node_color=node_colors,
+                           edgecolors="k", linewidths=0.3)
+    wmax = max(d.get("weight", 1.0) for _, _, d in G.edges(data=True)) if G.edges else 1.0
+    widths = [d.get("weight", 0.5) / wmax * 1.5 for _, _, d in G.edges(data=True)]
+    nx.draw_networkx_edges(G, pos, ax=ax, width=widths, edge_color="#90A4AE", alpha=0.3)
+
+    n_clusters = len(np.unique(partition))
+    ax.set_title(f"LRG partition ({fname}, tau={tau:.3g}, {n_clusters} clusters)")
+    ax.axis("off")
+    fig.tight_layout()
+    return fig, ax
+
+
+def plot_lrg_sankey(
+    result: PipelineResult,
+    filter_name: str | None = None,
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+    """Sankey diagram of community evolution across tau scales.
+
+    Reuses the matplotlib Sankey implementation in
+    :mod:`multifunbrain.visualization.plotlib.sankey`.
+
+    Returns
+    -------
+    (fig, ax)
+    """
+    from .sankey import plot_sankey
+
+    fname = _resolve_filter(result, filter_name)
+    parts = result.lrg_results.get(fname)
+    if not parts:
+        raise ValueError(f"No LRG results for filter '{fname}'.")
+
+    partitions = [p["partition"] for p in parts]
+    tau_values = [p["tau"] for p in parts]
+
+    plot_sankey(partitions, tau_values, backend="matplotlib")
+    fig = plt.gcf()
+    ax = fig.axes[0] if fig.axes else None
+    fig.suptitle(f"LRG Sankey ({fname})", fontsize=12)
+    return fig, ax
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Multiscale plots (one or two MultiscaleResults)
+# ──────────────────────────────────────────────────────────────────────
 
 
 def plot_specific_heat(
@@ -43,25 +284,36 @@ def plot_specific_heat(
     mark_tau_prime: bool = True,
     mark_tau_star: bool = True,
     title: str | None = None,
-    color: str = "#1565C0",
+    color: str | None = None,
     compact: bool = True,
 ) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
-    """``C(τ)`` curve with τ′ and τ* marked."""
+    """``C(τ)`` curve with τ′ and τ* marked.
+
+    Template: SPECIFIC_HEAT pulls all colours from ``style.PALETTES``
+    so the trace, τ′ line, and τ* line are visually consistent across
+    every figure in the project. Pass ``color=...`` to override the
+    trace colour for an overlay (e.g. when stacking two curves).
+    """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(4.5, 3.0))
+        fig, ax = plt.subplots(figsize=FIGSIZE["single"])
     else:
         fig = ax.get_figure()
 
+    trace_color = color if color is not None else PALETTES["material"]["primary_dark"]
     ax.semilogx(result.time_grid_broad, result.specific_heat, "-",
-                color=color, linewidth=1.4)
+                color=trace_color, linewidth=1.4)
     ax.axhline(0.0, color="grey", linewidth=0.5, alpha=0.5)
 
     if mark_tau_prime and np.isfinite(result.tau_prime):
-        ax.axvline(result.tau_prime, color="#E65100", linestyle="--",
-                   linewidth=1.0, alpha=0.8, label=r"$\tau'=1/\lambda_{max}$")
+        ax.axvline(result.tau_prime,
+                   color=PALETTES["material"]["accent"],
+                   linestyle="--", linewidth=1.0, alpha=0.8,
+                   label=r"$\tau'=1/\lambda_{max}$")
     if mark_tau_star and np.isfinite(result.tau_star):
-        ax.axvline(result.tau_star, color="#2E7D32", linestyle=":",
-                   linewidth=1.2, alpha=0.9, label=r"$\tau^*$")
+        ax.axvline(result.tau_star,
+                   color=PALETTES["material"]["success"],
+                   linestyle=":", linewidth=1.2, alpha=0.9,
+                   label=r"$\tau^*$")
 
     fs = 8 if compact else 10
     ax.set_xlabel(r"$\tau$", fontsize=fs)
@@ -286,9 +538,10 @@ def plot_partition_flow(
 ) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
     """Per-node × per-τ partition raster — visual proxy for a Sankey.
 
-    Each row is a node, each column a τ, and the cell colour encodes the
-    cluster label at that τ. Metastable nodes (those whose membership-set
-    changes) are marked with a vertical red tick at the row's far right.
+    Each row is a node, each column a τ, and the cell colour encodes
+    the cluster label at that τ. Metastable nodes (those whose
+    membership-set changes) are marked with a vertical red tick at the
+    row's far right.
     """
     if not result.per_tau:
         raise ValueError(f"MultiscaleResult {result.label!r} has no per-τ entries.")
@@ -336,10 +589,10 @@ def plot_tanglegram(
 ) -> matplotlib.figure.Figure:
     """Paired dendrograms with leaf-to-leaf connections.
 
-    Draws dendrogram A on the left, B on the right (mirrored), and a thin
-    line for each leaf connecting its position in A to its position in B.
-    Highlights crossings — i.e. pairs of leaves whose relative order
-    differs between the two dendrograms.
+    Draws dendrogram A on the left, B on the right (mirrored), and a
+    thin line for each leaf connecting its position in A to its
+    position in B. Highlights crossings — i.e. pairs of leaves whose
+    relative order differs between the two dendrograms.
     """
     if not result_a.per_tau or not result_b.per_tau:
         raise ValueError("Both MultiscaleResults must have per-τ entries.")
