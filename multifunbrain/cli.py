@@ -13,8 +13,6 @@ from typing import Any, Callable
 import networkx as nx
 import pandas as pd
 
-log = logging.getLogger(__name__)
-
 from .core import hello_brain
 from .generation import generate_hmn
 from .pipeline import (
@@ -26,7 +24,6 @@ from .pipeline import (
 )
 from .visualization import (
     plot_correlation_matrix,
-    plot_eigenvalue_spectrum,
     plot_filtered_comparison,
     plot_lrg_dendrogram,
     plot_lrg_entropy,
@@ -41,6 +38,8 @@ from .visualization import (
     plot_signed_network,
     plot_weight_distribution,
 )
+
+log = logging.getLogger(__name__)
 
 CommandHandler = Callable[[argparse.Namespace], int]
 
@@ -367,6 +366,7 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
 
     # ── Process matrices with progressive save + progress bar ────────
     import warnings
+
     from tqdm import tqdm
 
     # Send ALL logging + Python warnings to a log file so the progress
@@ -628,7 +628,6 @@ def _cmd_plot(args: argparse.Namespace) -> int:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-
     from tqdm import tqdm
 
     input_path: Path = args.input.resolve()

@@ -1,10 +1,12 @@
 """Graph generation utilities for the :mod:`multifunbrain` package."""
 
 import random
-import numpy as np
+
 import networkx as nx
+import numpy as np
 
 from ..core import band_filter
+
 
 def generate_hmn(levels=3, base_module_size=4, p_in=1.0, p_out=0.05, seed=None):
     """
@@ -39,7 +41,7 @@ def generate_hmn(levels=3, base_module_size=4, p_in=1.0, p_out=0.05, seed=None):
 
     # Recursively build higher-level modules
     current_modules = modules
-    for level in range(1, levels + 1):
+    for _level in range(1, levels + 1):
         next_modules = []
         for i in range(0, len(current_modules), 2):
             if i + 1 >= len(current_modules):
@@ -128,7 +130,7 @@ def generate_brain_timeseries(
     ts = []
 
     base_freqs = [5, 10, 20]  # theta, alpha, beta
-    for i in range(n_regions):
+    for _i in range(n_regions):
         signal = np.zeros_like(t)
 
         # Combine sinusoids with random phase and amplitude
@@ -397,13 +399,13 @@ def generate_multiscale_graph(n_clusters=4, cluster_size=10, p_in=0.8, p_out=0.0
     """
     rng = np.random.default_rng(seed)
     G = nx.Graph()
-    total_nodes = n_clusters * cluster_size
+    n_clusters * cluster_size
 
     # Track node offsets to assign unique IDs
     node_offset = 0
     clusters = []
 
-    for c in range(n_clusters):
+    for _c in range(n_clusters):
         # Create an intra-cluster Erdős–Rényi graph
         cluster = nx.erdos_renyi_graph(cluster_size, p_in, seed=int(rng.integers(1e6)))
         mapping = {node: node + node_offset for node in cluster.nodes()}
@@ -423,7 +425,7 @@ def generate_multiscale_graph(n_clusters=4, cluster_size=10, p_in=0.8, p_out=0.0
     return G
 
 
-def generate_hierarchical_multiscale_graph(levels=[4, 3, 2], p_in=0.9, p_decay=0.4, seed=None):
+def generate_hierarchical_multiscale_graph(levels=None, p_in=0.9, p_decay=0.4, seed=None):
     """
     Generate a hierarchical modular graph with multiple structural scales.
 
@@ -437,8 +439,9 @@ def generate_hierarchical_multiscale_graph(levels=[4, 3, 2], p_in=0.9, p_decay=0
     Returns:
         G (networkx.Graph): Graph with hierarchical modular structure.
     """
+    if levels is None:
+        levels = [4, 3, 2]
     rng = np.random.default_rng(seed)
-    node_counter = 0
     current_nodes = []
     G = nx.Graph()
 
@@ -451,8 +454,8 @@ def generate_hierarchical_multiscale_graph(levels=[4, 3, 2], p_in=0.9, p_decay=0
     # Bottom-up hierarchical build
     groups = []
     total_nodes = 1
-    for l in levels:
-        total_nodes *= l
+    for n_level in levels:
+        total_nodes *= n_level
 
     # Create lowest-level nodes
     current_nodes = list(range(total_nodes))
@@ -494,7 +497,6 @@ def generate_hierarchical_modular_pa(
     Returns:
         G (networkx.Graph): Final graph with hierarchical modular structure and PA links.
     """
-    import random
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -516,7 +518,7 @@ def generate_hierarchical_modular_pa(
         node_counter += base_module_size
 
     # Step 2: Build higher-level modules and connect with PA
-    for level in range(levels):
+    for _level in range(levels):
         new_modules = []
         for i in range(0, len(modules), 2):
             if i + 1 >= len(modules):

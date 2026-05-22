@@ -76,10 +76,18 @@ line-length = 88
 
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.per-file-ignores]
+# Package __init__.py files are re-export hubs; F401 (unused import) is the point.
+"**/__init__.py" = ["F401"]
+# The notebook convenience module is a deliberate wildcard one-liner namespace.
+"multifunbrain/notebook/__init__.py" = ["F401", "F403", "E402"]
+
+[tool.ruff.lint.isort]
 known-first-party = ["multifunbrain"]
 
 [tool.mypy]
