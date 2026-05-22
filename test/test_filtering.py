@@ -6,7 +6,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from multifunbrain.analysis.filtering import (
+from multifunbrain.processing import (
     apply_all_filters,
     filter_absolute_threshold,
     filter_partial_correlation,

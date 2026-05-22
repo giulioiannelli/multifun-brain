@@ -13,7 +13,6 @@ from typing import Any, Callable
 import networkx as nx
 import pandas as pd
 
-from .core import hello_brain
 from .generation import generate_hmn
 from .pipeline import (
     PipelineConfig,
@@ -250,7 +249,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _cmd_hello(args: argparse.Namespace) -> int:
-    print(hello_brain(args.name))
+    print(f"Hello, {args.name}! Welcome to multifun-brain.")
     return 0
 
 

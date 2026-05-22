@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from multifunbrain.analysis.netmetrics import (
+from multifunbrain.analysis.network import (
     compute_global_metrics,
     compute_node_metrics,
     compute_rich_club_curve,

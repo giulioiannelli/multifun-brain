@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from ...core import marchenko_pastur_density
+from ...preprocessing.denoising import marchenko_pastur_density
 
 __all__ = ["correlation_spectrum_analysis"]
 

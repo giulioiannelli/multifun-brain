@@ -5,7 +5,9 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import ArrayLike
 
-from ..core import marchenko_pastur_density as _marchenko_pastur_density
+from ..preprocessing.denoising import (
+    marchenko_pastur_density as _marchenko_pastur_density,
+)
 
 __all__ = [
     "compute_correlation_matrix",

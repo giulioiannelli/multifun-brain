@@ -1,13 +1,24 @@
 """Convenience re-exports for interactive notebook sessions.
 
-This submodule collects imports that are repeatedly used across the project's
-Jupyter notebooks so that each notebook can stay tidy. Extend or trim the list
-below to fit your workflow.
-
-Typical usage::
+This module is **deliberately wildcard** — its whole purpose is to let a
+notebook write one line at the top::
 
     from multifunbrain.notebook import *
-    # os, Path, json, logging, np, ...
+
+and get the full toolkit (numpy, pandas, networkx, scipy clustering,
+sklearn metrics, plotly/matplotlib, nilearn, plus every public symbol of
+``multifunbrain.analysis``, ``multifunbrain.visualization.plotlib``, and
+the pipeline helpers) without a 20-line import preamble.
+
+This is **not an anti-pattern in this file**: it is the explicit
+ergonomic contract for interactive use. Do **not** replace these
+``from X import *`` lines with explicit imports — instead curate the
+``__all__`` lists in the source modules so the wildcards land an
+intentional, audited set of names. The Ruff config silences F401/F403
+specifically here via ``[tool.ruff.lint.per-file-ignores]``.
+
+Library code, CLI code, scripts, and tests must use explicit imports
+from canonical homes; this convenience namespace is for notebooks only.
 """
 
 from __future__ import annotations

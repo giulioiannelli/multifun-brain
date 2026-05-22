@@ -1,8 +1,12 @@
 # Module map — "where does X live?"
 
-Single canonical home per function/class. Legacy import paths (the
-`analysis/*.py` shims) re-export to keep older notebooks working — new
-code should use the canonical paths below.
+Single canonical home per function/class. Phase 1 of the cleanup
+retired the back-compat shim files under `multifunbrain/analysis/`
+(`corrmatrix.py`, `filtering.py`, `netmetrics.py`, `lrglib.py`) and
+collapsed `multifunbrain/core.py`. The public ergonomic surface
+(`from multifunbrain.analysis import X` for the common symbols) is
+preserved by re-exports inside `multifunbrain/analysis/__init__.py`,
+but new code should still prefer the canonical paths below.
 
 ## By concern
 
@@ -21,7 +25,7 @@ code should use the canonical paths below.
 | `detect_dead_regions` | `preprocessing/dead_regions.py` |
 | `prepare_correlation_matrix` | `preprocessing/prepare.py` |
 | `marchenko_pastur_denoise` | `preprocessing/denoising.py` |
-| `marchenko_pastur_density` (re-export) | `preprocessing/denoising.py` (defined in `core.py`) |
+| `marchenko_pastur_density` | `preprocessing/denoising.py` (moved from `core.py` in Phase 1) |
 
 ### Processing — `multifunbrain.processing`
 
@@ -103,15 +107,35 @@ in `plotlib/pipeline_plots.py` (`plot_correlation_matrix`,
 
 Synthetic-network generators (`generate_hmn`, etc.).
 
-## Legacy shim paths (still work, prefer canonical above)
+## Ergonomic re-exports
 
-- `multifunbrain.analysis.corrmatrix` → re-exports I/O, preprocessing,
-  LRG partitions, ARI from canonical homes.
-- `multifunbrain.analysis.descriptive` → re-exports `compute_precision_matrix`
-  from `processing.partial_correlation`; its own splits live in
-  `analysis/descriptive/`.
-- `multifunbrain.analysis.filtering` → re-exports from
-  `processing.{filtering, backbone, percolation}`.
-- `multifunbrain.analysis.netmetrics` → re-exports from `analysis.network.*`.
-- `multifunbrain.analysis.lrglib` → re-exports from `analysis.lrg.*`.
-- `multifunbrain.core` → re-exports `band_filter` from `processing.temporal`.
+`multifunbrain.analysis.__init__` and the package-level
+`multifunbrain.__init__` re-export the most common public symbols from
+sibling packages (`io`, `preprocessing`, `processing`) so notebooks can
+write::
+
+    from multifunbrain.analysis import detect_dead_regions  # ergonomic
+    # equivalent canonical import:
+    from multifunbrain.preprocessing.dead_regions import detect_dead_regions
+
+Library code, CLI code, scripts, and tests should use the canonical
+import. The ergonomic surface is only there for notebooks and the
+``multifunbrain.notebook`` wildcard namespace.
+
+### What changed in Phase 1
+
+Phase 1 of the multi-phase cleanup (branch `phase-1-retire-shims`)
+deleted these files:
+
+- `multifunbrain/analysis/corrmatrix.py`
+- `multifunbrain/analysis/filtering.py`
+- `multifunbrain/analysis/netmetrics.py`
+- `multifunbrain/analysis/lrglib.py`
+- `multifunbrain/core.py`
+
+Symbols that used to live in those files are now reachable only via
+their canonical homes (and the ergonomic re-exports). The
+`hello_brain` helper was inlined into the CLI ``hello`` subcommand;
+`marchenko_pastur_density` moved from `core.py` to
+`preprocessing/denoising.py`; `band_filter` is exposed via
+`processing.temporal` (and the top-level `multifunbrain` namespace).
