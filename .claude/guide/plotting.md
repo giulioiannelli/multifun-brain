@@ -7,18 +7,81 @@ re-derive plot logic inline. This guide is the rule book.
 
 ## Where plot code lives
 
-- `multifunbrain/visualization/plotlib/pipeline_plots.py` — the main
-  family of plots that take a `PipelineResult` (or a sub-dict /
-  ndarray) and produce a figure.
-- `multifunbrain/visualization/plotlib/entropy.py` — atomic helper
-  `plot_entropy_and_C(ax, t, Sm1, dS)` for the dual-axis LRG curves.
-- `multifunbrain/visualization/plotlib/sankey_matplotlib.py`,
-  `.../sankey_plotly.py` — Sankey backends.
-- `multifunbrain/visualization/plotlib/colorbars.py` — colorbar
-  utilities (e.g. `imshow_colorbar_caxdivider`).
+Each section of the pipeline has its own file under
+`multifunbrain/visualization/plotlib/`:
 
-If a plot pattern is repeated in two places, it belongs in
-`pipeline_plots.py`. Promote it before the third copy exists.
+- **`descriptive.py`** — Section 1 plots: `plot_weight_distribution`,
+  `plot_eigenvalue_spectrum`, `plot_signed_laplacian_spectrum`,
+  `plot_signed_balance`, `plot_correlation_matrix`.
+- **`filtering.py`** — Section 2 plots: `plot_percolation_curve`,
+  `plot_filtered_comparison`.
+- **`network.py`** — Section 3 standard-network plots: `plot_node_metrics`,
+  `plot_signed_network`, `plot_network`.
+- **`lrg.py`** — Section 3 LRG plots (both per-`PipelineResult` and
+  per-`MultiscaleResult`): `plot_lrg_entropy`, `plot_lrg_dendrogram`,
+  `plot_lrg_psi`, `plot_lrg_partition_network`, `plot_lrg_sankey`,
+  `plot_specific_heat`, `plot_specific_heat_overlay`,
+  `plot_dendrogram_with_psi`, `plot_psi_curve`, `plot_rmi_curve`,
+  `plot_partition_flow`, `plot_tanglegram`, `plot_metastable_overlay`.
+- **`grids.py`** — `plot_results_grid` (canonical multi-panel composer)
+  and `plot_pipeline_summary` (six-panel single-result overview).
+- **`sankey.py`** — `plot_sankey(..., backend="plotly"|"matplotlib")`
+  merging both backends behind one entry point.
+- **`entropy.py`** — atomic helper `plot_entropy_and_C(ax, t, Sm1, dS)`
+  for the dual-axis LRG curves.
+- **`colorbars.py`** — colorbar utilities (e.g.
+  `imshow_colorbar_caxdivider`).
+- **`base.py`** — shared scaffolding (`ensure_axes`,
+  `apply_decorations`) every helper builds on.
+- **`_helpers.py`** — package-private helpers used by multiple sections
+  (`_get_section`, `_resolve_filter`, `_signed_laplacian_embedding`,
+  `_network_layout`, `_nearest_tau_index`).
+
+Style defaults — palettes, figure sizes, rcParams profiles — live one
+level up at `multifunbrain/visualization/style.py`. Pull colours and
+sizes from there instead of hardcoding hex strings.
+
+If a plot pattern is repeated in two places, promote it into the
+section file that fits before the third copy exists.
+
+## Templates and the style module
+
+`multifunbrain/visualization/style.py` is the single source of truth
+for colours and sizes. The named tables are:
+
+| Constant | Use |
+|---|---|
+| `PALETTES["material"]` | Material Design accent palette — the project default. Keys: `primary`, `primary_dark`, `primary_light`, `accent`, `accent_light`, `danger`, `danger_light`, `success`, `success_light`, `neutral`. |
+| `PALETTES["spectral"]` | 13-colour qualitative palette for partition / module colouring. |
+| `PALETTES["signed"]` | `{"pos": ..., "neg": ...}` for signed-edge networks. |
+| `PALETTES["contrast"]` | `{"co2": ..., "rest": ...}` for April-batch contrast comparisons. |
+| `FIGSIZE` | Standard figure sizes (`single`, `wide`, `tall`, `square`, `grid_cell`, `double`). |
+| `rc_context(profile)` | Context manager for one-shot rcParams profiles (`paper`, `slide`). |
+
+### Crystallized templates
+
+When the user says "dendrogram", they mean **the** dendrogram template.
+Each template below is a canonical recipe: signature + which constants
+to import + the one-liner that produces a project-consistent figure.
+
+- **`DENDROGRAM`** — `multifunbrain/visualization/plotlib/lrg.py::plot_lrg_dendrogram`. Threshold line uses `PALETTES["material"]["danger_light"]`. Wide figsize.
+- **`CORRELATION_HEATMAP`** — `descriptive.py::plot_correlation_matrix`. `FIGSIZE["square"]`, diverging `RdBu_r` cmap, `TwoSlopeNorm` centred at zero.
+- **`PSI_CURVE`** — `lrg.py::plot_psi_curve`. `FIGSIZE["single"]`; cluster-marker uses Material `danger`.
+- **`SPECIFIC_HEAT`** — `lrg.py::plot_specific_heat`. Trace uses Material `primary_dark`; τ′ uses `accent`; τ* uses `success`.
+- **`SANKEY_FLOW`** — `sankey.py::plot_sankey(partitions, taus, backend="plotly")` for interactive view; `backend="matplotlib"` for static PDF.
+- **`RESULTS_GRID`** — `grids.py::plot_results_grid` is the *only* approved way to render N results side-by-side. Never write a `for r in results: plt.subplots(...)` loop in a notebook.
+
+When adding a new template:
+
+1. Pick the section file that owns the concept (`descriptive`,
+   `filtering`, `network`, `lrg`, `grids`, `sankey`).
+2. Use `ensure_axes(ax, figsize=FIGSIZE["..."])` for the create-or-reuse
+   boilerplate.
+3. Pull every colour from `PALETTES` — no inline hex strings.
+4. Accept the standard decoration kwargs (`title`, `colorbar`,
+   `legend`) so the function composes with `plot_results_grid`.
+5. Export from the section file's `__all__` and add a row to the
+   template table above.
 
 ## Signature convention
 
@@ -99,15 +162,23 @@ in the library.
 
 ## Adding a new plot
 
-1. Grep `pipeline_plots.py` to confirm no existing helper covers it.
-2. Write the new helper in `pipeline_plots.py` with the standard
-   signature (`result, *, ax=None, **decoration_kwargs`).
-3. Add it to the module's `__all__`.
-4. Re-export it from
-   `multifunbrain/visualization/plotlib/__init__.py` (`from .pipeline_plots import ...` block + `__all__`).
-5. If it's grid-composable, expose `title`, `colorbar`, `legend`
-   kwargs.
-6. Use it from the notebook in 1–3 lines.
+1. Identify the section file that owns the concept (`descriptive`,
+   `filtering`, `network`, `lrg`, `grids`, `sankey`). Grep that file
+   to confirm no existing helper covers it.
+2. Write the new helper with the standard signature
+   (`result, *, ax=None, **decoration_kwargs`) using `ensure_axes`
+   from `base.py` to handle the axes boilerplate.
+3. Pull colours from `multifunbrain.visualization.style.PALETTES`
+   and sizes from `FIGSIZE`. Do not inline hex strings.
+4. Add the function to the section file's `__all__`.
+5. Re-export it from
+   `multifunbrain/visualization/plotlib/__init__.py` (`from .<section>
+   import ...` block + `__all__`).
+6. If it's grid-composable, expose `title`, `colorbar`, `legend`
+   kwargs (use `apply_decorations` from `base.py`).
+7. Use it from the notebook in 1–3 lines.
+8. If the plot is a *new* crystallized template, add a row to the
+   "Crystallized templates" table above.
 
 ## Verifying a notebook before handoff
 
