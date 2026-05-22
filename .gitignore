@@ -1,7 +1,45 @@
+# Python build / packaging
 __pycache__/
-.ipynb_checkpoints/
 *.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Notebooks / Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
 .DS_Store
-data/*
-notebooks/archive/
+.vscode/
+*.swp
+*.swo
+
+# Environment / secrets
+.env
+.envrc
+
+# Scratch / temporary
+.tmp/
+
+# Data (gitignored entirely — collaborator drops + outputs live here)
+data/
+
+# Per-machine agentic settings
 .claude/settings.local.json
+
+# Plan files (host-machine only)
+/.claude/plans/
+
+# Archived labs (post phase-6 rename); old path kept for the transition
+labs/archive/
+notebooks/archive/

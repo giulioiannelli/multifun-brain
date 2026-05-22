@@ -1,12 +1,11 @@
 """Utility functions for analysing graphs."""
 
-from typing import List, Tuple
 
 import networkx as nx
 import numpy as np
+from networkx import Graph
 from scipy.cluster.hierarchy import linkage
 
-from networkx import Graph
 
 def get_giant_component(G, strongly=False):
     """
@@ -31,7 +30,7 @@ def get_giant_component(G, strongly=False):
     largest_component = max(components, key=len)
     return G.subgraph(largest_component).copy()
 
-def get_giant_component_leftoff(graph: nx.Graph, remove_selfloops: bool = True) -> Tuple[nx.Graph, List]:
+def get_giant_component_leftoff(graph: nx.Graph, remove_selfloops: bool = True) -> tuple[nx.Graph, list]:
     """
     Remove self-loops (optional) from the input graph and return its largest connected component,
     along with the list of nodes that are not part of the giant component.
@@ -113,7 +112,7 @@ def build_correlation_network(ts, regularize=True, remove_negative=True, blank_d
 
     return G, remnodes
 
-def compute_threshold_stats(G0: nx.Graph) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def compute_threshold_stats(G0: nx.Graph) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute threshold values and connectivity statistics for a weighted graph.
 
@@ -159,7 +158,7 @@ def compute_threshold_stats(G0: nx.Graph) -> Tuple[np.ndarray, np.ndarray, np.nd
             Einf[i] = len(giant.edges()) / E0
     return Th, Einf, Pinf
 
-def compute_threshold_stats_fast(G0: Graph, n_points: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def compute_threshold_stats_fast(G0: Graph, n_points: int = 0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Fast computation of threshold values and connectivity statistics using Union-Find.
     
@@ -210,20 +209,20 @@ def compute_threshold_stats_fast(G0: Graph, n_points: int = 0) -> Tuple[np.ndarr
         component_size = [1] * n_nodes
         
         def find(x):
-            if parent[x] != x:
-                parent[x] = find(parent[x])
-            return parent[x]
-        
+            if parent[x] != x:  # noqa: B023
+                parent[x] = find(parent[x])  # noqa: B023
+            return parent[x]  # noqa: B023
+
         def union(x, y):
             px, py = find(x), find(y)
             if px == py:
                 return
-            if rank[px] < rank[py]:
+            if rank[px] < rank[py]:  # noqa: B023
                 px, py = py, px
-            parent[py] = px
-            component_size[px] += component_size[py]
-            if rank[px] == rank[py]:
-                rank[px] += 1
+            parent[py] = px  # noqa: B023
+            component_size[px] += component_size[py]  # noqa: B023
+            if rank[px] == rank[py]:  # noqa: B023
+                rank[px] += 1  # noqa: B023
         
         # Add edges above threshold
         valid_edge_count = 0
@@ -343,11 +342,7 @@ def compute_normalized_linkage(dists, G, method="average", labelList: str = "nam
 
 def compute_optimal_threshold_std(merge_distances):
     diffs = np.diff(merge_distances)
-    print("diffs", diffs)
-    
     max_gap_index = np.argmax(diffs)
-    print("max_gap_index", max_gap_index)
-    
     optimal_threshold = (merge_distances[max_gap_index] + merge_distances[max_gap_index + 1]) / 2
     return optimal_threshold
 

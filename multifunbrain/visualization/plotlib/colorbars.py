@@ -1,4 +1,5 @@
-from typing import Any, Tuple
+from typing import Any
+
 #
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -19,7 +20,7 @@ def imshow_colorbar_caxdivider(
     orientation: str = "vertical",
     axis_dim: int = 2,
     **kwargs
-) -> Tuple[AxesDivider, Axes, Any]:
+) -> tuple[AxesDivider, Axes, Any]:
     """
     Display a colorbar in a specified position and orientation relative to a 
     given axis. Supports both 2D and 3D axes.

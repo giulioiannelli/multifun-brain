@@ -1,24 +1,6 @@
-# Agent Guide for `multifun-brain`
+# Agent guide — see `CLAUDE.md`
 
-**Start at [`CLAUDE.md`](CLAUDE.md)** — the project memory file is the canonical entry point and is auto-loaded by Claude Code each session. The detail below this block is preserved from the original guide; the structured agent infrastructure lives under `.claude/`:
-
-- `.claude/guide/` — durable how-tos (best practices, pipeline usage, results tracking, data layout, module map).
-- `.claude/never-always/` — inviolable rules (`never.md`, `always.md`).
-- `.claude/history/` — dated, append-only chronicle of architectural changes.
-- `.claude/reports/` — dated analytical reports.
-
----
-
-This repository contains utilities and notebooks for constructing, analysing, and visualising hierarchical modular brain networks with an emphasis on fMRI correlation matrices, band-limited filtering, and Laplacian renormalisation group (LRG) style multiscale analysis.
-
-## Repository scope
-- **Package modules (`multifunbrain/`)**: core signal utilities, correlation-network helpers, Laplacian diffusion/LRG routines, graph-thresholding tools, network generation, and visualisation helpers.
-- **Notebooks (`notebooks/`)**: end-to-end exploratory workflows for computing band-specific correlation matrices, running diffusion-based clustering, and comparing fMRI contrasts or scales.
-- **Documentation (`docs/`) and config**: Markdown guides, changelog, packaging metadata, and contribution guidelines.
-
-## Agent instructions
-- Prefer reusing existing utilities from `multifunbrain.analysis`, `multifunbrain.core`, and `multifunbrain.visualization` instead of duplicating logic.
-- Keep notebooks self-contained and portable: use relative `Path` operations, avoid hard-coded user-specific directories, and describe inputs/outputs in markdown cells.
-- When adding analytical steps (e.g., noise filtering, clustering comparisons), provide concise docstrings or markdown notes that link the step back to the multiscale/LRG workflow.
-- Do not add large data files to the repository. Place outputs in a `results/` directory created by the notebook if needed.
-- Follow existing formatting conventions (PEP8 in code cells, 88-character line guidance) and keep variable names descriptive for fMRI/graph contexts.
+The canonical agent guide for this repo is **`CLAUDE.md`** (auto-loaded by
+Claude Code). Structured agent infrastructure (rules, history, reports,
+guides, commands, hooks, agents, skills) lives under `.claude/` — start
+at `.claude/README.md`.

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
-
-from matplotlib.axes import Axes
+from collections.abc import Sequence
 
 from . import Polygon, Rectangle, plt
 
