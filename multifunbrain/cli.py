@@ -353,8 +353,8 @@ def _cmd_analyze(args: argparse.Namespace) -> int:
             print(f"\n{len(files)} files found.", file=sys.stderr)
             return 0
 
-        from .pipeline import _label_from_path
-        labels = [_label_from_path(f, input_path) for f in files]
+        from .pipeline.discovery import label_from_path
+        labels = [label_from_path(f, input_path) for f in files]
         print(f"Found {len(files)} matrices. Running pipeline...", file=sys.stderr)
     else:
         print(f"Error: {input_path} is not a file or directory.", file=sys.stderr)

@@ -1,5 +1,14 @@
 # Agent Guide for `multifun-brain`
 
+**Start at [`CLAUDE.md`](CLAUDE.md)** — the project memory file is the canonical entry point and is auto-loaded by Claude Code each session. The detail below this block is preserved from the original guide; the structured agent infrastructure lives under `.claude/`:
+
+- `.claude/guide/` — durable how-tos (best practices, pipeline usage, results tracking, data layout, module map).
+- `.claude/never-always/` — inviolable rules (`never.md`, `always.md`).
+- `.claude/history/` — dated, append-only chronicle of architectural changes.
+- `.claude/reports/` — dated analytical reports.
+
+---
+
 This repository contains utilities and notebooks for constructing, analysing, and visualising hierarchical modular brain networks with an emphasis on fMRI correlation matrices, band-limited filtering, and Laplacian renormalisation group (LRG) style multiscale analysis.
 
 ## Repository scope
