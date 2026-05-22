@@ -85,17 +85,6 @@ pre-computed results and calls library functions.
 
 ---
 
-## Never drop the back-compat shim files in `multifunbrain/analysis/{corrmatrix,descriptive,filtering,netmetrics,lrglib}.py` without a separate migration PR
-
-**Why:** Existing external notebooks and scripts import from these
-paths. Removing them silently breaks downstream work.
-
-**How to apply:** Removing a shim requires its own PR that first audits
-all callers (`rg "from multifunbrain.analysis.<file>" `) and migrates
-them to canonical paths. Land that before deleting the shim.
-
----
-
 ## Never duplicate a function definition across files
 
 **Why:** Two copies drift apart, fixes land in only one, downstream
