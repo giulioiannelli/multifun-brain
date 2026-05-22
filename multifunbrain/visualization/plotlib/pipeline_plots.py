@@ -543,7 +543,7 @@ def plot_filtered_comparison(
         alphas = wts / wmax * 0.7 + 0.05
 
         # Draw edges one by one for per-edge alpha.
-        for (u, v, d), w, a in zip(G.edges(data=True), widths, alphas):
+        for (u, v, _d), w, a in zip(G.edges(data=True), widths, alphas):
             nx.draw_networkx_edges(
                 G, pos, edgelist=[(u, v)], ax=ax,
                 width=float(w), edge_color=edge_col, alpha=float(a),
@@ -983,14 +983,14 @@ def plot_lrg_entropy(
     """Entropy (1-S) and specific heat (C) on dual y-axes.
 
     Recomputes the Laplacian spectrum from the stored filtered graph,
-    then calls the existing ``entropy()`` function from lrglib.
+    then calls :func:`multifunbrain.analysis.lrg.kernel.entropy`.
 
     Returns
     -------
     (fig, ax)
     """
-    from ...analysis.lrglib import entropy as lrg_entropy
-    from ...analysis.lrglib import graph_laplacian_and_spectrum
+    from ...analysis.lrg.kernel import entropy as lrg_entropy
+    from ...analysis.lrg.kernel import graph_laplacian_and_spectrum
 
     fname = _resolve_filter(result, filter_name)
     G = result.filtered_networks[fname]["graph"]
@@ -1069,7 +1069,7 @@ def plot_lrg_psi(
     -------
     (fig, ax)
     """
-    from ...analysis.lrglib import compute_optimal_threshold
+    from ...analysis.lrg.partitions import compute_optimal_threshold
 
     fname = _resolve_filter(result, filter_name)
     parts = result.lrg_results.get(fname)
