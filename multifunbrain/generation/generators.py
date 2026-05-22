@@ -5,7 +5,7 @@ import random
 import networkx as nx
 import numpy as np
 
-from ..core import band_filter
+from ..processing.temporal import band_filter
 
 
 def generate_hmn(levels=3, base_module_size=4, p_in=1.0, p_out=0.05, seed=None):

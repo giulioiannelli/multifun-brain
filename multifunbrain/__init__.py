@@ -30,7 +30,6 @@ from . import (
     processing,
     visualization,
 )
-from .core import band_filter, hello_brain, marchenko_pastur_density
 from .pipeline import (
     PipelineConfig,
     PipelineResult,
@@ -41,6 +40,8 @@ from .pipeline import (
     run_pipeline_batch,
     run_pipeline_directory,
 )
+from .preprocessing.denoising import marchenko_pastur_density
+from .processing.temporal import band_filter
 
 try:  # pragma: no cover - fallback when package metadata is unavailable
     __version__ = version("multifunbrain")
@@ -57,7 +58,6 @@ __all__ = [
     "datasets",
     "discover_matrices",
     "generation",
-    "hello_brain",
     "io",
     "load_results",
     "marchenko_pastur_density",
