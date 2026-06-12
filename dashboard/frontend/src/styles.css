@@ -19,9 +19,9 @@ body {
 }
 
 .app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 20px 48px;
+  max-width: none;
+  margin: 0;
+  padding: 0 24px 48px;
 }
 
 .topbar {
@@ -148,6 +148,15 @@ body {
 
 .plot-card.wide {
   grid-column: 1 / -1;
+}
+
+/* Square plot area (correlation / partial-correlation matrices): keeps cells
+   square AND the colourbar adjacent to the matrix instead of pinned far right. */
+.plot-square {
+  width: 100%;
+  max-width: 940px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
 }
 
 .plot-card h3 {

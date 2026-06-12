@@ -109,14 +109,14 @@ export function ExploreView({
             kind="heatmap"
             title="Correlation matrix"
             params={base}
-            wide
+            square
             figureOptions={{ log: logScale }}
           />
           <PlotPanel
             kind="partial_correlation"
             title="Partial correlation"
             params={base}
-            wide
+            square
             figureOptions={{ log: logScale }}
           />
           <PlotPanel kind="spectrum" title="Eigenvalue spectrum" params={base} />

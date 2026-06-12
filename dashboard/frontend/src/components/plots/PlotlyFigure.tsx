@@ -7,25 +7,30 @@ const Plot = createPlotlyComponent(Plotly);
 
 export function PlotlyFigure({
   data,
-  layout,
+  layout = {},
   height = 420,
+  fill = false,
 }: {
   data: any[];
   layout?: Record<string, any>;
   height?: number;
+  // fill: size to the parent container (which sets the height, e.g. a square
+  // aspect-ratio wrapper) instead of using a fixed pixel height.
+  fill?: boolean;
 }) {
+  const { height: layoutHeight, margin: layoutMargin, ...restLayout } = layout;
   return (
     <Plot
       data={data}
       layout={{
         autosize: true,
-        height,
-        margin: { l: 55, r: 20, t: 44, b: 44 },
+        margin: layoutMargin ?? { l: 55, r: 20, t: 44, b: 44 },
         font: { size: 12 },
-        ...layout,
+        ...restLayout,
+        ...(fill ? {} : { height: layoutHeight ?? height }),
       }}
       useResizeHandler
-      style={{ width: "100%" }}
+      style={fill ? { width: "100%", height: "100%" } : { width: "100%" }}
       config={{
         displaylogo: false,
         responsive: true,

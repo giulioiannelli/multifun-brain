@@ -33,10 +33,12 @@ function PanelBody({
   kind,
   params,
   figureOptions,
+  square,
 }: {
   kind: string;
   params: QueryParams;
   figureOptions?: Record<string, any>;
+  square?: boolean;
 }) {
   const { spec, loading, error } = usePlot(kind, params);
   if (error) return <div className="plot-error">{error}</div>;
@@ -56,6 +58,13 @@ function PanelBody({
   const builder = FIGURE_BUILDERS[kind];
   if (builder) {
     const fig = builder(spec, figureOptions);
+    if (square) {
+      return (
+        <div className="plot-square">
+          <PlotlyFigure data={fig.data} layout={fig.layout} fill />
+        </div>
+      );
+    }
     return <PlotlyFigure data={fig.data} layout={fig.layout} height={fig.layout.height ?? 420} />;
   }
   return <pre className="raw-spec">{JSON.stringify(spec, null, 2)}</pre>;
@@ -66,12 +75,14 @@ export function PlotPanel({
   title,
   params,
   wide = false,
+  square = false,
   figureOptions,
 }: {
   kind: string;
   title: string;
   params: QueryParams;
   wide?: boolean;
+  square?: boolean;
   figureOptions?: Record<string, any>;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
@@ -79,7 +90,7 @@ export function PlotPanel({
     <section ref={ref} className={`plot-card${wide ? " wide" : ""}`}>
       <h3>{title}</h3>
       {inView ? (
-        <PanelBody kind={kind} params={params} figureOptions={figureOptions} />
+        <PanelBody kind={kind} params={params} figureOptions={figureOptions} square={square} />
       ) : (
         <div className="hint">…</div>
       )}
