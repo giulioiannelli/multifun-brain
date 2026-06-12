@@ -1,7 +1,7 @@
-// Generic Plotly wrapper (factory + plotly.js-dist-min, reliable with Vite).
-// Plot builders produce { data, layout }; this renders them responsively.
-import Plotly from "plotly.js-dist-min";
+// Generic Plotly wrapper (factory + custom slim Plotly bundle). Plot builders
+// produce { data, layout }; this renders them responsively.
 import createPlotlyComponent from "react-plotly.js/factory";
+import Plotly from "../../lib/plotly";
 
 const Plot = createPlotlyComponent(Plotly);
 

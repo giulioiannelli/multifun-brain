@@ -1,11 +1,18 @@
-// One self-contained plot card: fetches its spec for (kind, params) and
-// dispatches to the matching renderer (Plotly figure / Cytoscape / table).
+// One self-contained plot card. Fetch + render are deferred until the card
+// scrolls into view (keeps initial paint fast). Dispatches the fetched spec to
+// the matching renderer (Plotly figure / Cytoscape / table). Cytoscape is
+// lazy-loaded so non-network tabs never download it.
+import { lazy, Suspense } from "react";
+import { useInView } from "../hooks/useInView";
 import { usePlot } from "../hooks/usePlot";
 import type { PlotSpec, QueryParams } from "../types";
-import { NetworkGraph } from "./plots/NetworkGraph";
 import { PlotlyFigure } from "./plots/PlotlyFigure";
 import { GlobalMetrics, NodeMetrics } from "./plots/Tables";
 import * as F from "./plots/figures";
+
+const NetworkGraph = lazy(() =>
+  import("./plots/NetworkGraph").then((m) => ({ default: m.NetworkGraph })),
+);
 
 type Builder = (spec: PlotSpec) => F.Figure;
 
@@ -22,6 +29,30 @@ const FIGURE_BUILDERS: Record<string, Builder> = {
   sankey: F.buildSankey,
 };
 
+function PanelBody({ kind, params }: { kind: string; params: QueryParams }) {
+  const { spec, loading, error } = usePlot(kind, params);
+  if (error) return <div className="plot-error">{error}</div>;
+  if (loading && !spec) return <div className="hint">Loading…</div>;
+  if (!spec) return null;
+  if (spec.error) return <div className="plot-error">{spec.error}</div>;
+
+  if (kind === "network")
+    return (
+      <Suspense fallback={<div className="hint">Loading graph…</div>}>
+        <NetworkGraph spec={spec} />
+      </Suspense>
+    );
+  if (kind === "global_metrics") return <GlobalMetrics spec={spec} />;
+  if (kind === "node_metrics") return <NodeMetrics spec={spec} />;
+
+  const builder = FIGURE_BUILDERS[kind];
+  if (builder) {
+    const fig = builder(spec);
+    return <PlotlyFigure data={fig.data} layout={fig.layout} height={fig.layout.height ?? 420} />;
+  }
+  return <pre className="raw-spec">{JSON.stringify(spec, null, 2)}</pre>;
+}
+
 export function PlotPanel({
   kind,
   title,
@@ -33,30 +64,11 @@ export function PlotPanel({
   params: QueryParams;
   wide?: boolean;
 }) {
-  const { spec, loading, error } = usePlot(kind, params);
-
-  function body() {
-    if (error) return <div className="plot-error">{error}</div>;
-    if (loading && !spec) return <div className="hint">Loading…</div>;
-    if (!spec) return null;
-    if (spec.error) return <div className="plot-error">{spec.error}</div>;
-
-    if (kind === "network") return <NetworkGraph spec={spec} />;
-    if (kind === "global_metrics") return <GlobalMetrics spec={spec} />;
-    if (kind === "node_metrics") return <NodeMetrics spec={spec} />;
-
-    const builder = FIGURE_BUILDERS[kind];
-    if (builder) {
-      const fig = builder(spec);
-      return <PlotlyFigure data={fig.data} layout={fig.layout} height={fig.layout.height ?? 420} />;
-    }
-    return <pre className="raw-spec">{JSON.stringify(spec, null, 2)}</pre>;
-  }
-
+  const [ref, inView] = useInView<HTMLDivElement>();
   return (
-    <section className={`plot-card${wide ? " wide" : ""}`}>
+    <section ref={ref} className={`plot-card${wide ? " wide" : ""}`}>
       <h3>{title}</h3>
-      {body()}
+      {inView ? <PanelBody kind={kind} params={params} /> : <div className="hint">…</div>}
     </section>
   );
 }
