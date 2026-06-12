@@ -24,15 +24,7 @@ export interface CatalogResponse {
   datasets: Dataset[];
 }
 
-export interface HeatmapSpec {
-  kind: string;
-  label: string;
-  n: number;
-  z: number[][];
-  names: string[];
-  networks: string[];
-  colors: string[];
-  zmin: number;
-  zmax: number;
-  error?: string;
-}
+// Plot specs are heterogeneous; we type them loosely and narrow per builder.
+export type PlotSpec = Record<string, any>;
+
+export type QueryParams = Record<string, string | number | undefined | null>;

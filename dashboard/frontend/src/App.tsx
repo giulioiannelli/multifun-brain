@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
 import { SelectorBar } from "./components/SelectorBar";
 import { ExploreView } from "./views/ExploreView";
@@ -15,7 +15,6 @@ export default function App() {
       .catalog()
       .then((res) => {
         setDatasets(res.datasets);
-        // Default to a dataset that actually has items (prefer april/global).
         const preferred =
           res.datasets.find((d) => d.id === "april/global") ??
           res.datasets.find((d) => d.items.length > 0) ??
@@ -33,6 +32,11 @@ export default function App() {
     const ds = datasets.find((d) => d.id === id);
     setLabel(ds?.items[0]?.label ?? null);
   }
+
+  const item = useMemo(() => {
+    const ds = datasets.find((d) => d.id === datasetId);
+    return ds?.items.find((it) => it.label === label) ?? null;
+  }, [datasets, datasetId, label]);
 
   return (
     <div className="app">
@@ -52,7 +56,7 @@ export default function App() {
       />
 
       <main className="content">
-        <ExploreView datasetId={datasetId} label={label} />
+        <ExploreView datasetId={datasetId} label={label} item={item} />
       </main>
     </div>
   );

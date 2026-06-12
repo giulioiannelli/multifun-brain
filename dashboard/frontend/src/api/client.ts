@@ -1,14 +1,18 @@
 // Thin typed fetch wrappers around the FastAPI backend. All calls go through
 // the same-origin /api prefix (Vite proxies it in dev; FastAPI serves it in prod).
-import type { CatalogResponse, HeatmapSpec } from "../types";
+import type { CatalogResponse, PlotSpec, QueryParams } from "../types";
 
 const BASE = "/api";
 
-async function getJSON<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+async function getJSON<T>(path: string, params?: QueryParams): Promise<T> {
+  let qs = "";
+  if (params) {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== "") sp.set(k, String(v));
+    }
+    qs = sp.toString() ? `?${sp.toString()}` : "";
+  }
   const res = await fetch(`${BASE}${path}${qs}`);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -19,6 +23,6 @@ async function getJSON<T>(
 
 export const api = {
   catalog: () => getJSON<CatalogResponse>("/catalog"),
-  heatmap: (dataset: string, label: string) =>
-    getJSON<HeatmapSpec>("/plot/heatmap", { dataset, label }),
+  plot: (kind: string, params: QueryParams) =>
+    getJSON<PlotSpec>(`/plot/${kind}`, params),
 };
