@@ -77,17 +77,53 @@ def precision_spec(result, **_) -> dict:
     return clean(spec)
 
 
+def _kde_curve(samples, lo: float, hi: float, n_used: int, binwidth: float, n_grid: int = 256):
+    """Gaussian-KDE density over ``[lo, hi]``, scaled to histogram counts.
+
+    Returns ``(xs, ys)`` where ``ys`` is the density times ``n_used * binwidth``
+    so the smooth curve overlays the count histogram directly. ``None, None`` if
+    the sample is too small/degenerate to estimate.
+    """
+    s = np.asarray(samples, dtype=float)
+    s = s[np.isfinite(s)]
+    s = s[(s >= lo) & (s <= hi)]
+    if s.size < 5 or float(np.ptp(s)) <= 0 or not binwidth or n_used <= 0:
+        return None, None
+    try:
+        from scipy.stats import gaussian_kde
+
+        kde = gaussian_kde(s)
+    except Exception:  # noqa: BLE001 - degenerate covariance etc.; just skip the overlay
+        return None, None
+    xs = np.linspace(lo, hi, n_grid)
+    ys = kde(xs) * (n_used * binwidth)
+    return xs, ys
+
+
 def weights_spec(result, **_) -> dict:
-    """Weight-distribution histogram (signed) + summary statistics."""
+    """Weight-distribution histogram (signed) + summary statistics + KDE overlay."""
     wd = (result.descriptive or {}).get("weight_distribution") or {}
     hist = wd.get("histogram")
     counts, edges = (hist[0], hist[1]) if hist is not None else (None, None)
+
+    kde_x = kde_y = None
+    if edges is not None and counts is not None and len(counts):
+        e = np.asarray(edges, dtype=float)
+        lo, hi = float(e[0]), float(e[-1])
+        nb = len(counts)
+        binwidth = (hi - lo) / nb if nb else 0.0
+        kde_x, kde_y = _kde_curve(
+            wd.get("all_weights"), lo, hi, int(np.sum(counts)), binwidth
+        )
+
     return clean(
         {
             "kind": "weights",
             "label": result.label,
             "counts": counts,
             "edges": edges,
+            "kde_x": kde_x,
+            "kde_y": kde_y,
             "n_positive": wd.get("n_positive"),
             "n_negative": wd.get("n_negative"),
             "frac_positive": wd.get("frac_positive"),
@@ -135,10 +171,10 @@ def _adaptive_spectrum_hist(eigs) -> dict:
     bulk = e[e <= hi]
     if bulk.size >= 2 and iqr > 0:
         edges = np.histogram_bin_edges(bulk, bins="fd")
-        if edges.size > 160:
-            edges = np.linspace(float(bulk.min()), hi, 121)
+        if edges.size > 51:  # cap at ~50 bins so a degenerate spike + sparse tail stays readable
+            edges = np.linspace(float(bulk.min()), hi, 51)
     else:
-        edges = np.linspace(float(e.min()), hi, 61)
+        edges = np.linspace(float(e.min()), hi, 41)
     counts, edges = np.histogram(bulk, bins=edges)
     above = np.sort(e[e > hi])[::-1]
     return {
@@ -159,6 +195,17 @@ def spectrum_spec(result, **_) -> dict:
     hist = _adaptive_spectrum_hist(sp.get("eigenvalues")) if sp.get("eigenvalues") is not None else {
         "counts": None, "edges": None, "n_above": 0, "above": [],
     }
+
+    kde_x = kde_y = None
+    if hist["edges"] is not None and hist["counts"] is not None and len(hist["counts"]):
+        e = np.asarray(hist["edges"], dtype=float)
+        lo, hi = float(e[0]), float(e[-1])
+        nb = len(hist["counts"])
+        binwidth = (hi - lo) / nb if nb else 0.0
+        kde_x, kde_y = _kde_curve(
+            sp.get("eigenvalues"), lo, hi, int(np.sum(hist["counts"])), binwidth
+        )
+
     return clean(
         {
             "kind": "spectrum",
@@ -166,6 +213,8 @@ def spectrum_spec(result, **_) -> dict:
             "eigenvalues": sp.get("eigenvalues"),
             "counts": hist["counts"],
             "edges": hist["edges"],
+            "kde_x": kde_x,
+            "kde_y": kde_y,
             "n_above": hist["n_above"],
             "above": hist["above"],
             "largest_eigenvalue": sp.get("largest_eigenvalue"),

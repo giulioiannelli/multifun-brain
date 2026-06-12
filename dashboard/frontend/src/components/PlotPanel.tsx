@@ -2,7 +2,7 @@
 // scrolls into view (keeps initial paint fast). Dispatches the fetched spec to
 // the matching renderer (Plotly figure / Cytoscape / table). Cytoscape is
 // lazy-loaded so non-network tabs never download it.
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { useInView } from "../hooks/useInView";
 import { usePlot } from "../hooks/usePlot";
 import type { PlotSpec, QueryParams } from "../types";
@@ -79,6 +79,7 @@ export function PlotPanel({
   square = false,
   figureOptions,
   caption,
+  headerControls,
 }: {
   kind: string;
   title: string;
@@ -87,11 +88,15 @@ export function PlotPanel({
   square?: boolean;
   figureOptions?: Record<string, any>;
   caption?: string;
+  headerControls?: ReactNode;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
   return (
     <section ref={ref} className={`plot-card${wide ? " wide" : ""}`}>
-      <h3>{title}</h3>
+      <div className="plot-head">
+        <h3>{title}</h3>
+        {headerControls && <div className="plot-controls">{headerControls}</div>}
+      </div>
       {caption && <p className="plot-caption">{caption}</p>}
       {inView ? (
         <PanelBody kind={kind} params={params} figureOptions={figureOptions} square={square} />

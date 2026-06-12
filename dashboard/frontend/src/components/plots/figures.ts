@@ -22,6 +22,28 @@ function binCenters(edges: number[]): number[] {
   return c;
 }
 
+// Smooth KDE overlay (density pre-scaled to count units by the backend). On a
+// log count axis the near-zero tails are floored so the curve sits at a baseline
+// instead of plunging to -inf and rendering as spurious spikes.
+function kdeTrace(x: number[], y: number[], yLog?: boolean): any {
+  const yy = yLog ? y.map((v) => Math.max(v, 0.5)) : y;
+  return {
+    type: "scatter",
+    x,
+    y: yy,
+    mode: "lines",
+    line: { color: "#1a1a1a", width: 2 },
+    name: "KDE",
+    hovertemplate: "λ ≈ %{x:.3g}<br>density %{y:.1f}<extra>KDE</extra>",
+    showlegend: false,
+  };
+}
+
+// Histogram y-axis spec honouring a linear/log toggle.
+function countAxis(yLog?: boolean): Record<string, any> {
+  return { title: { text: yLog ? "count (log)" : "count" }, type: yLog ? "log" : "linear" };
+}
+
 // Symmetric-log transform of a signed matrix for the heatmap colour mapping.
 // zt = sign(z) * log10(1 + |z| / linthresh); the colourbar is re-ticked with the
 // original values, and the untouched z is returned for hover (`customdata`).
@@ -132,7 +154,7 @@ export function buildMatrix(
 // Correlation eigenvalue spectrum with Marchenko-Pastur bulk bounds. Uses the
 // backend's density-adaptive bins (counts/edges) so the bulk is resolved; a few
 // extreme eigenvalues (n_above) are noted in an annotation rather than binned in.
-export function buildSpectrum(spec: PlotSpec): Figure {
+export function buildSpectrum(spec: PlotSpec, opts: { yLog?: boolean; kde?: boolean } = {}): Figure {
   const edges: number[] | null = spec.edges ?? null;
   const counts: number[] | null = spec.counts ?? null;
   const lo = edges ? edges[0] : null;
@@ -186,14 +208,16 @@ export function buildSpectrum(spec: PlotSpec): Figure {
           },
         ];
 
+  if (opts.kde && spec.kde_x && spec.kde_y) {
+    data.push(kdeTrace(spec.kde_x, spec.kde_y, opts.yLog));
+  }
+
   return {
     data,
     layout: {
       title: { text: `eigenvalue spectrum · signal ${spec.n_signal ?? "?"} / noise ${spec.n_noise ?? "?"}` },
       xaxis: { title: { text: "eigenvalue λ" } },
-      // Log count axis: the bulk piles many near-degenerate eigenvalues into the
-      // first bin, so a linear axis hides the decaying tail. Log reveals it.
-      yaxis: { title: { text: "count (log)" }, type: "log" },
+      yaxis: countAxis(opts.yLog),
       shapes,
       annotations,
       bargap: 0,
@@ -201,24 +225,32 @@ export function buildSpectrum(spec: PlotSpec): Figure {
   };
 }
 
-// Signed weight distribution (positive vs negative bars).
-export function buildWeights(spec: PlotSpec): Figure {
+// Signed weight distribution (positive vs negative bars) with optional KDE
+// overlay and a linear/log count axis.
+export function buildWeights(spec: PlotSpec, opts: { yLog?: boolean; kde?: boolean } = {}): Figure {
   const centers = spec.edges ? binCenters(spec.edges) : [];
   const colors = centers.map((c) => (c >= 0 ? SIGNED.pos : SIGNED.neg));
+  const data: any[] = [
+    {
+      type: "bar",
+      x: centers,
+      y: spec.counts ?? [],
+      marker: { color: colors },
+      hovertemplate: "w ≈ %{x:.3f}<br>count %{y}<extra></extra>",
+    },
+  ];
+  if (opts.kde && spec.kde_x && spec.kde_y) {
+    data.push({
+      ...kdeTrace(spec.kde_x, spec.kde_y, opts.yLog),
+      hovertemplate: "w ≈ %{x:.3f}<br>density %{y:.1f}<extra>KDE</extra>",
+    });
+  }
   return {
-    data: [
-      {
-        type: "bar",
-        x: centers,
-        y: spec.counts ?? [],
-        marker: { color: colors },
-        hovertemplate: "w ≈ %{x:.3f}<br>count %{y}<extra></extra>",
-      },
-    ],
+    data,
     layout: {
       title: { text: `weight distribution · +${(spec.frac_positive ?? 0).toFixed?.(2)} / −${(spec.frac_negative ?? 0).toFixed?.(2)}` },
       xaxis: { title: { text: "edge weight" } },
-      yaxis: { title: { text: "count" } },
+      yaxis: countAxis(opts.yLog),
       bargap: 0.02,
     },
   };

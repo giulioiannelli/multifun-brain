@@ -8,6 +8,32 @@ import type { QueryParams, ResultItem } from "../types";
 const TABS = ["Descriptive", "Network", "LRG"] as const;
 type Tab = (typeof TABS)[number];
 
+// In-panel toggles for a histogram: linear/log count axis + KDE overlay.
+function HistToggles({
+  yLog,
+  setYLog,
+  kde,
+  setKde,
+}: {
+  yLog: boolean;
+  setYLog: (v: boolean) => void;
+  kde: boolean;
+  setKde: (v: boolean) => void;
+}) {
+  return (
+    <>
+      <div className="seg">
+        <span>y</span>
+        <button className={!yLog ? "active" : ""} onClick={() => setYLog(false)}>linear</button>
+        <button className={yLog ? "active" : ""} onClick={() => setYLog(true)}>log</button>
+      </div>
+      <div className="seg">
+        <button className={kde ? "active" : ""} onClick={() => setKde(!kde)}>KDE</button>
+      </div>
+    </>
+  );
+}
+
 function TauSelector({
   params,
   value,
@@ -48,6 +74,10 @@ export function ExploreView({
   const [filter, setFilter] = useState<string | null>(null);
   const [tauIndex, setTauIndex] = useState<number>(-1);
   const [logScale, setLogScale] = useState<boolean>(false);
+  const [specYLog, setSpecYLog] = useState<boolean>(true);
+  const [specKde, setSpecKde] = useState<boolean>(true);
+  const [wtYLog, setWtYLog] = useState<boolean>(false);
+  const [wtKde, setWtKde] = useState<boolean>(true);
 
   const filters = item?.filters ?? [];
   useEffect(() => {
@@ -120,8 +150,24 @@ export function ExploreView({
             square
             figureOptions={{ log: logScale }}
           />
-          <PlotPanel kind="spectrum" title="Eigenvalue spectrum" params={base} />
-          <PlotPanel kind="weights" title="Weight distribution" params={base} />
+          <PlotPanel
+            kind="weights"
+            title="Weight distribution"
+            params={base}
+            figureOptions={{ yLog: wtYLog, kde: wtKde }}
+            headerControls={
+              <HistToggles yLog={wtYLog} setYLog={setWtYLog} kde={wtKde} setKde={setWtKde} />
+            }
+          />
+          <PlotPanel
+            kind="spectrum"
+            title="Eigenvalue spectrum"
+            params={base}
+            figureOptions={{ yLog: specYLog, kde: specKde }}
+            headerControls={
+              <HistToggles yLog={specYLog} setYLog={setSpecYLog} kde={specKde} setKde={setSpecKde} />
+            }
+          />
           <PlotPanel kind="signed_laplacian" title="Signed Laplacian" params={base} />
           <PlotPanel kind="signed_balance" title="Signed balance" params={base} />
         </div>

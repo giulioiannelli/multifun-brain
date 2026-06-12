@@ -159,6 +159,25 @@ body {
   margin: 0 auto;
 }
 
+.plot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.plot-head h3 {
+  margin: 0;
+}
+
+.plot-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .plot-card h3 {
   font-size: 13px;
   margin: 0 0 8px;
