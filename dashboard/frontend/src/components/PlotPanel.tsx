@@ -19,6 +19,7 @@ type Builder = (spec: PlotSpec, opts?: Record<string, any>) => F.Figure;
 const FIGURE_BUILDERS: Record<string, Builder> = {
   heatmap: (s, o) => F.buildMatrix(s, "correlation matrix", o),
   partial_correlation: (s, o) => F.buildMatrix(s, "partial correlation", o),
+  precision: (s, o) => F.buildMatrix(s, "precision matrix", o),
   weights: F.buildWeights,
   spectrum: F.buildSpectrum,
   signed_laplacian: F.buildSignedLaplacian,
@@ -77,6 +78,7 @@ export function PlotPanel({
   wide = false,
   square = false,
   figureOptions,
+  caption,
 }: {
   kind: string;
   title: string;
@@ -84,11 +86,13 @@ export function PlotPanel({
   wide?: boolean;
   square?: boolean;
   figureOptions?: Record<string, any>;
+  caption?: string;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
   return (
     <section ref={ref} className={`plot-card${wide ? " wide" : ""}`}>
       <h3>{title}</h3>
+      {caption && <p className="plot-caption">{caption}</p>}
       {inView ? (
         <PanelBody kind={kind} params={params} figureOptions={figureOptions} square={square} />
       ) : (

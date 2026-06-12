@@ -63,6 +63,20 @@ def partial_correlation_spec(result, **_) -> dict:
     return clean(spec)
 
 
+def precision_spec(result, **_) -> dict:
+    """Precision matrix (inverse correlation) from the precision section."""
+    prec = (result.descriptive or {}).get("precision") or {}
+    mat = prec.get("precision_matrix")
+    if mat is None:
+        return {"kind": "precision", "label": result.label, "error": "no precision matrix"}
+    mat = np.asarray(mat)
+    bound = float(np.nanmax(np.abs(mat))) or 1.0
+    spec = _matrix_spec(result, mat, "precision", zmin=-bound, zmax=bound)
+    spec["method"] = prec.get("method")
+    spec["sparsity"] = prec.get("sparsity")
+    return clean(spec)
+
+
 def weights_spec(result, **_) -> dict:
     """Weight-distribution histogram (signed) + summary statistics."""
     wd = (result.descriptive or {}).get("weight_distribution") or {}
@@ -87,14 +101,73 @@ def weights_spec(result, **_) -> dict:
     )
 
 
+def _adaptive_spectrum_hist(eigs) -> dict:
+    """Density-adaptive histogram of an eigenvalue spectrum.
+
+    Bin width follows the bulk density via the Freedman-Diaconis rule
+    (∝ IQR·n^-1/3). When a heavy tail (a few isolated signal eigenvalues) would
+    blow the bin count up and flatten the bulk into one bar, the bulk is binned
+    over a robust window (≤ 99th percentile) and the extreme eigenvalues are
+    reported separately (``n_above``/``above``) instead of being binned in.
+    """
+    e = np.asarray(eigs, dtype=float)
+    e = e[np.isfinite(e)]
+    empty = {"counts": None, "edges": None, "n_above": 0, "above": []}
+    if e.size < 2:
+        return empty
+
+    q25, q75 = np.percentile(e, [25, 75])
+    iqr = float(q75 - q25)
+    n = int(e.size)
+    width = 2 * iqr / (n ** (1 / 3)) if iqr > 0 else 0.0
+    span = float(e.max() - e.min())
+    nbins_full = int(np.ceil(span / width)) if width > 0 else 0
+
+    # Well-behaved spectrum: plain Freedman-Diaconis over the full range.
+    if 0 < nbins_full <= 200:
+        counts, edges = np.histogram(e, bins="fd")
+        return {"counts": counts, "edges": edges, "n_above": 0, "above": []}
+
+    # Heavy tail: focus on the bulk, surface the extreme eigenvalues as markers.
+    hi = float(np.percentile(e, 99))
+    if hi <= float(e.min()):
+        hi = float(np.median(e))
+    bulk = e[e <= hi]
+    if bulk.size >= 2 and iqr > 0:
+        edges = np.histogram_bin_edges(bulk, bins="fd")
+        if edges.size > 160:
+            edges = np.linspace(float(bulk.min()), hi, 121)
+    else:
+        edges = np.linspace(float(e.min()), hi, 61)
+    counts, edges = np.histogram(bulk, bins=edges)
+    above = np.sort(e[e > hi])[::-1]
+    return {
+        "counts": counts,
+        "edges": edges,
+        "n_above": int(above.size),
+        "above": [float(x) for x in above[:8]],
+    }
+
+
 def spectrum_spec(result, **_) -> dict:
-    """Correlation eigenvalue spectrum with Marchenko-Pastur bulk bounds."""
+    """Correlation eigenvalue spectrum with Marchenko-Pastur bulk bounds.
+
+    Ships a precomputed density-adaptive histogram (``counts``/``edges``) so the
+    bulk is resolved even when one large signal eigenvalue dominates the range.
+    """
     sp = (result.descriptive or {}).get("spectrum") or {}
+    hist = _adaptive_spectrum_hist(sp.get("eigenvalues")) if sp.get("eigenvalues") is not None else {
+        "counts": None, "edges": None, "n_above": 0, "above": [],
+    }
     return clean(
         {
             "kind": "spectrum",
             "label": result.label,
             "eigenvalues": sp.get("eigenvalues"),
+            "counts": hist["counts"],
+            "edges": hist["edges"],
+            "n_above": hist["n_above"],
+            "above": hist["above"],
             "largest_eigenvalue": sp.get("largest_eigenvalue"),
             "mp_lambda_plus": sp.get("mp_lambda_plus"),
             "mp_lambda_minus": sp.get("mp_lambda_minus"),

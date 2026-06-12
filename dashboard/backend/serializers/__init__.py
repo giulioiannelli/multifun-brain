@@ -17,6 +17,7 @@ PLOT_KINDS: dict[str, Callable] = {
     # descriptive (Section 1)
     "heatmap": descriptive.heatmap_spec,
     "partial_correlation": descriptive.partial_correlation_spec,
+    "precision": descriptive.precision_spec,
     "weights": descriptive.weights_spec,
     "spectrum": descriptive.spectrum_spec,
     "signed_laplacian": descriptive.signed_laplacian_spec,

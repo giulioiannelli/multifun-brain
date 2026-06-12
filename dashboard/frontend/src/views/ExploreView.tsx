@@ -113,8 +113,9 @@ export function ExploreView({
             figureOptions={{ log: logScale }}
           />
           <PlotPanel
-            kind="partial_correlation"
-            title="Partial correlation"
+            kind="precision"
+            title="Precision matrix"
+            caption="Inverse of the correlation matrix (Θ). Large |Θ| between two regions ⇒ strong direct coupling once every other region is accounted for; ≈ 0 ⇒ conditionally independent."
             params={base}
             square
             figureOptions={{ log: logScale }}

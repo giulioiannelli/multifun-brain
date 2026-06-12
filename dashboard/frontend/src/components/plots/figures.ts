@@ -129,14 +129,22 @@ export function buildMatrix(
   };
 }
 
-// Correlation eigenvalue spectrum with Marchenko-Pastur bulk bounds.
+// Correlation eigenvalue spectrum with Marchenko-Pastur bulk bounds. Uses the
+// backend's density-adaptive bins (counts/edges) so the bulk is resolved; a few
+// extreme eigenvalues (n_above) are noted in an annotation rather than binned in.
 export function buildSpectrum(spec: PlotSpec): Figure {
+  const edges: number[] | null = spec.edges ?? null;
+  const counts: number[] | null = spec.counts ?? null;
+  const lo = edges ? edges[0] : null;
+  const hi = edges ? edges[edges.length - 1] : null;
+
+  // MP bulk bounds, drawn only when they fall inside the displayed range.
   const shapes: any[] = [];
   for (const [val, c] of [
     [spec.mp_lambda_minus, "#888"],
     [spec.mp_lambda_plus, "#D32F2F"],
   ] as [number, string][]) {
-    if (val != null) {
+    if (val != null && lo != null && hi != null && val >= lo && val <= hi) {
       shapes.push({
         type: "line",
         x0: val, x1: val, yref: "paper", y0: 0, y1: 1,
@@ -144,22 +152,51 @@ export function buildSpectrum(spec: PlotSpec): Figure {
       });
     }
   }
+
+  const annotations: any[] = [];
+  if (spec.n_above > 0) {
+    const mx = spec.above?.[0];
+    const mxTxt = typeof mx === "number" ? mx.toPrecision(4) : mx;
+    annotations.push({
+      xref: "paper", yref: "paper", x: 1, y: 1, xanchor: "right", yanchor: "top",
+      showarrow: false, align: "right", font: { size: 11, color: "#D32F2F" },
+      text: `${spec.n_above} eigenvalue${spec.n_above > 1 ? "s" : ""} above range · max λ=${mxTxt}`,
+    });
+  }
+
+  const data: any[] =
+    edges && counts
+      ? [
+          {
+            type: "bar",
+            x: binCenters(edges),
+            y: counts,
+            width: edges.slice(1).map((e, i) => e - edges[i]),
+            marker: { color: PRIMARY, line: { width: 0 } },
+            hovertemplate: "λ ≈ %{x:.3g}<br>count %{y}<extra></extra>",
+          },
+        ]
+      : [
+          {
+            type: "histogram",
+            x: spec.eigenvalues,
+            nbinsx: 40,
+            marker: { color: PRIMARY },
+            hovertemplate: "λ ≈ %{x:.3f}<br>count %{y}<extra></extra>",
+          },
+        ];
+
   return {
-    data: [
-      {
-        type: "histogram",
-        x: spec.eigenvalues,
-        nbinsx: 40,
-        marker: { color: PRIMARY },
-        hovertemplate: "λ ≈ %{x:.3f}<br>count %{y}<extra></extra>",
-      },
-    ],
+    data,
     layout: {
       title: { text: `eigenvalue spectrum · signal ${spec.n_signal ?? "?"} / noise ${spec.n_noise ?? "?"}` },
       xaxis: { title: { text: "eigenvalue λ" } },
-      yaxis: { title: { text: "count" } },
+      // Log count axis: the bulk piles many near-degenerate eigenvalues into the
+      // first bin, so a linear axis hides the decaying tail. Log reveals it.
+      yaxis: { title: { text: "count (log)" }, type: "log" },
       shapes,
-      bargap: 0.02,
+      annotations,
+      bargap: 0,
     },
   };
 }
