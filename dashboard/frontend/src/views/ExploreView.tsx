@@ -47,6 +47,7 @@ export function ExploreView({
   const [tab, setTab] = useState<Tab>("Descriptive");
   const [filter, setFilter] = useState<string | null>(null);
   const [tauIndex, setTauIndex] = useState<number>(-1);
+  const [logScale, setLogScale] = useState<boolean>(false);
 
   const filters = item?.filters ?? [];
   useEffect(() => {
@@ -89,9 +90,35 @@ export function ExploreView({
       )}
 
       {tab === "Descriptive" && (
+        <div className="subbar">
+          <div className="seg">
+            <span>Matrix colour scale</span>
+            <button className={!logScale ? "active" : ""} onClick={() => setLogScale(false)}>
+              Linear
+            </button>
+            <button className={logScale ? "active" : ""} onClick={() => setLogScale(true)}>
+              Log
+            </button>
+          </div>
+        </div>
+      )}
+
+      {tab === "Descriptive" && (
         <div className="plot-grid">
-          <PlotPanel kind="heatmap" title="Correlation matrix" params={base} wide />
-          <PlotPanel kind="partial_correlation" title="Partial correlation" params={base} wide />
+          <PlotPanel
+            kind="heatmap"
+            title="Correlation matrix"
+            params={base}
+            wide
+            figureOptions={{ log: logScale }}
+          />
+          <PlotPanel
+            kind="partial_correlation"
+            title="Partial correlation"
+            params={base}
+            wide
+            figureOptions={{ log: logScale }}
+          />
           <PlotPanel kind="spectrum" title="Eigenvalue spectrum" params={base} />
           <PlotPanel kind="weights" title="Weight distribution" params={base} />
           <PlotPanel kind="signed_laplacian" title="Signed Laplacian" params={base} />

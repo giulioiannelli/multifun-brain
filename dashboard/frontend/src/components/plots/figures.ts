@@ -22,27 +22,98 @@ function binCenters(edges: number[]): number[] {
   return c;
 }
 
+// Symmetric-log transform of a signed matrix for the heatmap colour mapping.
+// zt = sign(z) * log10(1 + |z| / linthresh); the colourbar is re-ticked with the
+// original values, and the untouched z is returned for hover (`customdata`).
+function symlogMatrix(z: (number | null)[][]): {
+  z: (number | null)[][];
+  zmin: number;
+  zmax: number;
+  tickvals: number[];
+  ticktext: string[];
+} {
+  let maxAbs = 0;
+  for (const row of z)
+    for (const v of row) {
+      if (v == null || !Number.isFinite(v)) continue;
+      const a = Math.abs(v);
+      if (a > maxAbs) maxAbs = a;
+    }
+  const linthresh = Math.max(maxAbs * 1e-2, 1e-6);
+  const t = (v: number | null) =>
+    v == null || !Number.isFinite(v)
+      ? null
+      : Math.sign(v) * Math.log10(1 + Math.abs(v) / linthresh);
+  const zt = z.map((row) => row.map(t));
+  const zmax = Math.log10(1 + maxAbs / linthresh) || 1;
+
+  const mags = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10].filter(
+    (m) => m <= maxAbs,
+  );
+  if (!mags.length) mags.push(maxAbs);
+  const tickvals: number[] = [];
+  const ticktext: string[] = [];
+  for (let i = mags.length - 1; i >= 0; i--) {
+    tickvals.push(t(-mags[i])!);
+    ticktext.push(String(-mags[i]));
+  }
+  tickvals.push(0);
+  ticktext.push("0");
+  for (const m of mags) {
+    tickvals.push(t(m)!);
+    ticktext.push(String(m));
+  }
+  return { z: zt, zmin: -zmax, zmax, tickvals, ticktext };
+}
+
 // Square correlation / partial-correlation matrix with atlas-name hover.
-export function buildMatrix(spec: PlotSpec, title: string): Figure {
+// opts.log switches the colour mapping to symmetric-log (handles signed data;
+// hover still reports the true value).
+export function buildMatrix(
+  spec: PlotSpec,
+  title: string,
+  opts: { log?: boolean } = {},
+): Figure {
   const showTicks = spec.n <= 120;
-  return {
-    data: [
-      {
-        type: "heatmap",
-        z: spec.z,
-        x: spec.names,
-        y: spec.names,
-        zmin: spec.zmin,
-        zmax: spec.zmax,
-        colorscale: "RdBu",
-        reversescale: true,
-        colorbar: { thickness: 12 },
-        hovertemplate:
-          "row: <b>%{y}</b><br>col: <b>%{x}</b><br>value = %{z:.3f}<extra></extra>",
+  const z = spec.z as (number | null)[][];
+
+  let trace: Record<string, any> = {
+    type: "heatmap",
+    z,
+    x: spec.names,
+    y: spec.names,
+    zmin: spec.zmin,
+    zmax: spec.zmax,
+    colorscale: "RdBu",
+    reversescale: true,
+    colorbar: { thickness: 12 },
+    hovertemplate:
+      "row: <b>%{y}</b><br>col: <b>%{x}</b><br>value = %{z:.3f}<extra></extra>",
+  };
+
+  if (opts.log && Array.isArray(z) && z.length) {
+    const s = symlogMatrix(z);
+    trace = {
+      ...trace,
+      z: s.z,
+      zmin: s.zmin,
+      zmax: s.zmax,
+      customdata: z,
+      colorbar: {
+        thickness: 12,
+        tickvals: s.tickvals,
+        ticktext: s.ticktext,
+        title: { text: "log", side: "right" },
       },
-    ],
+      hovertemplate:
+        "row: <b>%{y}</b><br>col: <b>%{x}</b><br>value = %{customdata:.3f}<extra></extra>",
+    };
+  }
+
+  return {
+    data: [trace],
     layout: {
-      title: { text: title },
+      title: { text: opts.log ? `${title} · log` : title },
       height: 620,
       xaxis: { constrain: "domain", tickfont: { size: 6 }, showticklabels: showTicks, tickangle: 90 },
       yaxis: {

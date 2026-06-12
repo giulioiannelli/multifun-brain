@@ -14,11 +14,11 @@ const NetworkGraph = lazy(() =>
   import("./plots/NetworkGraph").then((m) => ({ default: m.NetworkGraph })),
 );
 
-type Builder = (spec: PlotSpec) => F.Figure;
+type Builder = (spec: PlotSpec, opts?: Record<string, any>) => F.Figure;
 
 const FIGURE_BUILDERS: Record<string, Builder> = {
-  heatmap: (s) => F.buildMatrix(s, "correlation matrix"),
-  partial_correlation: (s) => F.buildMatrix(s, "partial correlation"),
+  heatmap: (s, o) => F.buildMatrix(s, "correlation matrix", o),
+  partial_correlation: (s, o) => F.buildMatrix(s, "partial correlation", o),
   weights: F.buildWeights,
   spectrum: F.buildSpectrum,
   signed_laplacian: F.buildSignedLaplacian,
@@ -29,7 +29,15 @@ const FIGURE_BUILDERS: Record<string, Builder> = {
   sankey: F.buildSankey,
 };
 
-function PanelBody({ kind, params }: { kind: string; params: QueryParams }) {
+function PanelBody({
+  kind,
+  params,
+  figureOptions,
+}: {
+  kind: string;
+  params: QueryParams;
+  figureOptions?: Record<string, any>;
+}) {
   const { spec, loading, error } = usePlot(kind, params);
   if (error) return <div className="plot-error">{error}</div>;
   if (loading && !spec) return <div className="hint">Loading…</div>;
@@ -47,7 +55,7 @@ function PanelBody({ kind, params }: { kind: string; params: QueryParams }) {
 
   const builder = FIGURE_BUILDERS[kind];
   if (builder) {
-    const fig = builder(spec);
+    const fig = builder(spec, figureOptions);
     return <PlotlyFigure data={fig.data} layout={fig.layout} height={fig.layout.height ?? 420} />;
   }
   return <pre className="raw-spec">{JSON.stringify(spec, null, 2)}</pre>;
@@ -58,17 +66,23 @@ export function PlotPanel({
   title,
   params,
   wide = false,
+  figureOptions,
 }: {
   kind: string;
   title: string;
   params: QueryParams;
   wide?: boolean;
+  figureOptions?: Record<string, any>;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
   return (
     <section ref={ref} className={`plot-card${wide ? " wide" : ""}`}>
       <h3>{title}</h3>
-      {inView ? <PanelBody kind={kind} params={params} /> : <div className="hint">…</div>}
+      {inView ? (
+        <PanelBody kind={kind} params={params} figureOptions={figureOptions} />
+      ) : (
+        <div className="hint">…</div>
+      )}
     </section>
   );
 }

@@ -27,10 +27,9 @@ export default function App() {
       .catch((e) => setError(String(e)));
   }, []);
 
-  function handleDataset(id: string) {
+  function handleSelect(id: string, lbl: string) {
     setDatasetId(id);
-    const ds = datasets.find((d) => d.id === id);
-    setLabel(ds?.items[0]?.label ?? null);
+    setLabel(lbl);
   }
 
   const item = useMemo(() => {
@@ -51,8 +50,7 @@ export default function App() {
         datasets={datasets}
         datasetId={datasetId}
         label={label}
-        onDataset={handleDataset}
-        onLabel={setLabel}
+        onSelect={handleSelect}
       />
 
       <main className="content">
