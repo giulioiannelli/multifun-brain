@@ -131,6 +131,19 @@ To preview the documentation site locally:
 mkdocs serve
 ```
 
+## Interactive dashboard
+
+A browser GUI lets non-coder collaborators explore analysis results from a single
+localhost URL — no notebooks, no code. Minimal setup:
+
+```bash
+pip install -e ".[dashboard]"     # adds FastAPI + uvicorn (one-time)
+./dashboard/run.sh                # builds the frontend once, serves http://localhost:8000
+```
+
+See [`dashboard/README.md`](dashboard/README.md) for how result bundles must be
+placed (including the per-subject structure) and the full run/dev instructions.
+
 ## Project layout
 
 ```

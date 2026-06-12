@@ -4,6 +4,7 @@
 #   ./dashboard/run.sh                       # build once if needed, then serve
 #   MFB_DASHBOARD_REBUILD=1 ./dashboard/run.sh   # force a frontend rebuild
 #   MFB_DASHBOARD_PORT=8001 ./dashboard/run.sh   # use a different port
+#   MFB_DASHBOARD_HOST=0.0.0.0 ./dashboard/run.sh   # share on the LAN (others open http://<your-ip>:8000)
 #
 # The build runs ONLY when there's no existing build (or you force it) — so
 # repeat launches start instantly instead of rebuilding every time.
@@ -12,6 +13,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 PORT="${MFB_DASHBOARD_PORT:-8000}"
+# Bind address. Default 127.0.0.1 (this machine only). Set 0.0.0.0 to also serve
+# collaborators on the same network — they then open http://<this-machine-ip>:PORT.
+HOST="${MFB_DASHBOARD_HOST:-127.0.0.1}"
 URL="http://localhost:${PORT}"
 
 # 1. Refuse to start (with a clear message) if the port is already taken —
@@ -53,6 +57,12 @@ fi
 # 4. Serve everything from one port; open the browser best-effort.
 cd "$ROOT"
 echo "[dashboard] serving at ${URL}  (Ctrl-C to stop)"
+if [ "$HOST" = "0.0.0.0" ]; then
+  # Best-effort: show a LAN URL collaborators can open from other machines.
+  LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  [ -n "${LAN_IP:-}" ] && echo "[dashboard] on this network, others can open:  http://${LAN_IP}:${PORT}"
+  echo "[dashboard] (if it's unreachable, allow inbound TCP ${PORT} in the firewall)"
+fi
 (
   sleep 2
   if command -v xdg-open >/dev/null 2>&1; then xdg-open "$URL"
@@ -60,4 +70,4 @@ echo "[dashboard] serving at ${URL}  (Ctrl-C to stop)"
   fi
 ) >/dev/null 2>&1 &
 
-exec python -m uvicorn dashboard.backend.app:app --host 127.0.0.1 --port "$PORT"
+exec python -m uvicorn dashboard.backend.app:app --host "$HOST" --port "$PORT"
