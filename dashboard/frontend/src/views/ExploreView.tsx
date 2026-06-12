@@ -78,6 +78,7 @@ export function ExploreView({
   const [specKde, setSpecKde] = useState<boolean>(true);
   const [wtYLog, setWtYLog] = useState<boolean>(false);
   const [wtKde, setWtKde] = useState<boolean>(true);
+  const [cleaned, setCleaned] = useState<boolean>(false);
 
   const filters = item?.filters ?? [];
   useEffect(() => {
@@ -92,6 +93,9 @@ export function ExploreView({
 
   const base: QueryParams = { dataset: datasetId, label };
   const fparams: QueryParams = { ...base, filter: filter ?? undefined };
+  // Descriptive plots can be served raw or MP-cleaned (refetched, hence a param).
+  const dparams: QueryParams = { ...base, cleaned: cleaned ? 1 : undefined };
+  const tag = cleaned ? " · MP-cleaned" : "";
 
   return (
     <div className="explore">
@@ -130,6 +134,15 @@ export function ExploreView({
               Log
             </button>
           </div>
+          <div className="seg">
+            <span>Data</span>
+            <button className={!cleaned ? "active" : ""} onClick={() => setCleaned(false)}>
+              Raw
+            </button>
+            <button className={cleaned ? "active" : ""} onClick={() => setCleaned(true)}>
+              MP-cleaned
+            </button>
+          </div>
         </div>
       )}
 
@@ -137,23 +150,27 @@ export function ExploreView({
         <div className="plot-grid">
           <PlotPanel
             kind="heatmap"
-            title="Correlation matrix"
-            params={base}
+            title={`Correlation matrix${tag}`}
+            params={dparams}
             square
             figureOptions={{ log: logScale }}
           />
           <PlotPanel
             kind="precision"
-            title="Precision matrix"
-            caption="Inverse of the correlation matrix (Θ). Large |Θ| between two regions ⇒ strong direct coupling once every other region is accounted for; ≈ 0 ⇒ conditionally independent."
-            params={base}
+            title={`Precision matrix${tag}`}
+            caption={
+              cleaned
+                ? "Inverse of the MP-cleaned correlation (diagonal hidden). Off-diagonal |Θ| = direct coupling between two regions once all others are accounted for."
+                : "Inverse of the correlation matrix (Θ). Large |Θ| between two regions ⇒ strong direct coupling once every other region is accounted for; ≈ 0 ⇒ conditionally independent."
+            }
+            params={dparams}
             square
             figureOptions={{ log: logScale }}
           />
           <PlotPanel
             kind="weights"
-            title="Weight distribution"
-            params={base}
+            title={`Weight distribution${tag}`}
+            params={dparams}
             figureOptions={{ yLog: wtYLog, kde: wtKde }}
             headerControls={
               <HistToggles yLog={wtYLog} setYLog={setWtYLog} kde={wtKde} setKde={setWtKde} />
@@ -161,15 +178,18 @@ export function ExploreView({
           />
           <PlotPanel
             kind="spectrum"
-            title="Eigenvalue spectrum"
-            params={base}
+            title={`Eigenvalue spectrum${tag}`}
+            caption={
+              cleaned
+                ? "Eigenvalues of the unit-diagonal correlation, with the Marchenko–Pastur noise density (red) overlaid and the bulk [λ−, λ+] (shaded) the cleaning flattens."
+                : undefined
+            }
+            params={dparams}
             figureOptions={{ yLog: specYLog, kde: specKde }}
             headerControls={
               <HistToggles yLog={specYLog} setYLog={setSpecYLog} kde={specKde} setKde={setSpecKde} />
             }
           />
-          <PlotPanel kind="signed_laplacian" title="Signed Laplacian" params={base} />
-          <PlotPanel kind="signed_balance" title="Signed balance" params={base} />
         </div>
       )}
 

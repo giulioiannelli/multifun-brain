@@ -29,6 +29,7 @@ def plot(
     filter: str | None = Query(default=None),
     tau_index: int = Query(default=-1),
     edge_quantile: float = Query(default=0.9),
+    cleaned: bool = Query(default=False),
 ) -> dict:
     """Serialise *kind* for the result identified by (*dataset*, *label*)."""
     serializer = PLOT_KINDS.get(kind)
@@ -43,5 +44,9 @@ def plot(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"unknown label {label!r}") from exc
     return serializer(
-        r, filter_name=filter, tau_index=tau_index, edge_quantile=edge_quantile
+        r,
+        filter_name=filter,
+        tau_index=tau_index,
+        edge_quantile=edge_quantile,
+        cleaned=cleaned,
     )

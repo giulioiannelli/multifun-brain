@@ -42,10 +42,48 @@ def _matrix_spec(result, matrix, kind: str, *, zmin: float, zmax: float) -> dict
     )
 
 
-def heatmap_spec(result, **_) -> dict:
-    """Prepared (signed) correlation matrix."""
+def _mp_cleaned(result):
+    """Marchenko-Pastur-cleaned correlation matrices, or ``None`` if no gamma.
+
+    Returns ``(clean_zero_diag, clean_unit_diag, gamma, sigma)``. ``clean_zero_diag``
+    is the LCBP-cleaned correlation with a zeroed diagonal (matching
+    ``corr_prepared``); ``clean_unit_diag`` restores a unit diagonal for inversion.
+    """
+    cfg = result.config
+    gamma = getattr(cfg, "gamma", None)
+    sigma = getattr(cfg, "sigma", 1.0) or 1.0
+    if gamma is None or result.corr_prepared is None:
+        return None
+    from multifunbrain.preprocessing.denoising import marchenko_pastur_denoise
+
+    cz = np.asarray(
+        marchenko_pastur_denoise(result.corr_prepared, gamma=float(gamma), sigma=float(sigma)),
+        dtype=float,
+    )
+    cu = cz.copy()
+    np.fill_diagonal(cu, 1.0)
+    return cz, cu, float(gamma), float(sigma)
+
+
+def _no_gamma(kind: str, result) -> dict:
+    return {
+        "kind": kind,
+        "label": result.label,
+        "error": "MP cleaning needs gamma (p/n), which isn't set for this result.",
+    }
+
+
+def heatmap_spec(result, cleaned: bool = False, **_) -> dict:
+    """Prepared (signed) correlation matrix, optionally MP-cleaned."""
     if result.corr_prepared is None:
         return {"kind": "heatmap", "label": result.label, "error": "no corr_prepared stored"}
+    if cleaned:
+        mc = _mp_cleaned(result)
+        if mc is None:
+            return _no_gamma("heatmap", result)
+        spec = _matrix_spec(result, mc[0], "heatmap", zmin=-1.0, zmax=1.0)
+        spec["cleaned"] = True
+        return spec
     return _matrix_spec(result, result.corr_prepared, "heatmap", zmin=-1.0, zmax=1.0)
 
 
@@ -63,8 +101,24 @@ def partial_correlation_spec(result, **_) -> dict:
     return clean(spec)
 
 
-def precision_spec(result, **_) -> dict:
-    """Precision matrix (inverse correlation) from the precision section."""
+def precision_spec(result, cleaned: bool = False, **_) -> dict:
+    """Precision matrix (inverse correlation). Cleaned = inverse of MP-cleaned C."""
+    if cleaned:
+        mc = _mp_cleaned(result)
+        if mc is None:
+            return _no_gamma("precision", result)
+        try:
+            mat = np.linalg.inv(mc[1])
+        except np.linalg.LinAlgError:
+            mat = np.linalg.pinv(mc[1])
+        mat = np.asarray(mat, dtype=float)
+        np.fill_diagonal(mat, 0.0)  # diagonal (conditional variance) hides the couplings
+        bound = float(np.nanmax(np.abs(mat))) or 1.0
+        spec = _matrix_spec(result, mat, "precision", zmin=-bound, zmax=bound)
+        spec["method"] = "inverse of MP-cleaned correlation"
+        spec["cleaned"] = True
+        return clean(spec)
+
     prec = (result.descriptive or {}).get("precision") or {}
     mat = prec.get("precision_matrix")
     if mat is None:
@@ -100,41 +154,60 @@ def _kde_curve(samples, lo: float, hi: float, n_used: int, binwidth: float, n_gr
     return xs, ys
 
 
-def weights_spec(result, **_) -> dict:
-    """Weight-distribution histogram (signed) + summary statistics + KDE overlay."""
-    wd = (result.descriptive or {}).get("weight_distribution") or {}
-    hist = wd.get("histogram")
-    counts, edges = (hist[0], hist[1]) if hist is not None else (None, None)
-
+def _weights_payload(result, weights, counts, edges) -> dict:
+    """Shared weight-distribution payload from raw samples + a histogram."""
+    w = np.asarray(weights, dtype=float)
+    w = w[np.isfinite(w)]
     kde_x = kde_y = None
     if edges is not None and counts is not None and len(counts):
         e = np.asarray(edges, dtype=float)
         lo, hi = float(e[0]), float(e[-1])
         nb = len(counts)
         binwidth = (hi - lo) / nb if nb else 0.0
-        kde_x, kde_y = _kde_curve(
-            wd.get("all_weights"), lo, hi, int(np.sum(counts)), binwidth
-        )
+        kde_x, kde_y = _kde_curve(w, lo, hi, int(np.sum(counts)), binwidth)
+    pos, neg, ntot = int((w > 0).sum()), int((w < 0).sum()), int(w.size)
+    return {
+        "kind": "weights",
+        "label": result.label,
+        "counts": counts,
+        "edges": edges,
+        "kde_x": kde_x,
+        "kde_y": kde_y,
+        "n_positive": pos,
+        "n_negative": neg,
+        "frac_positive": pos / ntot if ntot else 0.0,
+        "frac_negative": neg / ntot if ntot else 0.0,
+        "mean": float(np.mean(w)) if ntot else 0.0,
+        "std": float(np.std(w)) if ntot else 0.0,
+        "median": float(np.median(w)) if ntot else 0.0,
+    }
 
-    return clean(
+
+def weights_spec(result, cleaned: bool = False, **_) -> dict:
+    """Weight-distribution histogram (signed) + KDE overlay, optionally MP-cleaned."""
+    if cleaned:
+        mc = _mp_cleaned(result)
+        if mc is None:
+            return _no_gamma("weights", result)
+        cz = mc[0]
+        w = cz[np.triu_indices_from(cz, k=1)]
+        w = w[np.isfinite(w)]
+        counts, edges = np.histogram(w, bins=100)
+        payload = _weights_payload(result, w, counts, edges)
+        payload["cleaned"] = True
+        return clean(payload)
+
+    wd = (result.descriptive or {}).get("weight_distribution") or {}
+    hist = wd.get("histogram")
+    counts, edges = (hist[0], hist[1]) if hist is not None else (None, None)
+    payload = _weights_payload(result, wd.get("all_weights", []), counts, edges)
+    payload.update(
         {
-            "kind": "weights",
-            "label": result.label,
-            "counts": counts,
-            "edges": edges,
-            "kde_x": kde_x,
-            "kde_y": kde_y,
-            "n_positive": wd.get("n_positive"),
-            "n_negative": wd.get("n_negative"),
-            "frac_positive": wd.get("frac_positive"),
-            "frac_negative": wd.get("frac_negative"),
-            "mean": wd.get("mean"),
-            "std": wd.get("std"),
             "skewness": wd.get("skewness"),
             "kurtosis": wd.get("kurtosis"),
-            "median": wd.get("median"),
         }
     )
+    return clean(payload)
 
 
 def _adaptive_spectrum_hist(eigs) -> dict:
@@ -185,14 +258,66 @@ def _adaptive_spectrum_hist(eigs) -> dict:
     }
 
 
-def spectrum_spec(result, **_) -> dict:
+def spectrum_spec(result, cleaned: bool = False, **_) -> dict:
     """Correlation eigenvalue spectrum with Marchenko-Pastur bulk bounds.
 
     Ships a precomputed density-adaptive histogram (``counts``/``edges``) so the
     bulk is resolved even when one large signal eigenvalue dominates the range.
+    In ``cleaned`` mode the eigenvalues are shown in proper unit-diagonal
+    correlation space (``eig + 1``) with the theoretical MP density overlaid and
+    the noise bulk ``[λ-, λ+]`` (the part the cleaning flattens) shaded.
     """
     sp = (result.descriptive or {}).get("spectrum") or {}
-    hist = _adaptive_spectrum_hist(sp.get("eigenvalues")) if sp.get("eigenvalues") is not None else {
+    raw_eigs = sp.get("eigenvalues")
+
+    if cleaned:
+        mc = _mp_cleaned(result)
+        if mc is None or raw_eigs is None:
+            return _no_gamma("spectrum", result)
+        gamma, sigma = mc[2], mc[3]
+        # corr_prepared has a zeroed diagonal (C - I); restore C-space eigenvalues.
+        mu = np.asarray(raw_eigs, dtype=float) + 1.0
+        hist = _adaptive_spectrum_hist(mu)
+        g = min(gamma, 1.0)
+        lam_minus = sigma * (1 - np.sqrt(g)) ** 2
+        lam_plus = sigma * (1 + np.sqrt(g)) ** 2
+
+        mp_x = mp_y = None
+        if hist["edges"] is not None and hist["counts"] is not None and len(hist["counts"]):
+            from multifunbrain.preprocessing.denoising import marchenko_pastur_density
+
+            e = np.asarray(hist["edges"], dtype=float)
+            binwidth = (float(e[-1]) - float(e[0])) / len(hist["counts"])
+            grid = np.linspace(lam_minus, lam_plus, 200)
+            mp_x = grid
+            mp_y = marchenko_pastur_density(grid, gamma=gamma, sigma=sigma) * (mu.size * binwidth)
+
+        n_noise = int(((mu >= lam_minus) & (mu <= lam_plus)).sum())
+        n_signal = int((mu > lam_plus).sum())
+        return clean(
+            {
+                "kind": "spectrum",
+                "label": result.label,
+                "eigenvalues": mu,
+                "counts": hist["counts"],
+                "edges": hist["edges"],
+                "kde_x": None,
+                "kde_y": None,
+                "n_above": hist["n_above"],
+                "above": hist["above"],
+                "mp_curve_x": mp_x,
+                "mp_curve_y": mp_y,
+                "bulk_lo": lam_minus,
+                "bulk_hi": lam_plus,
+                "mp_lambda_minus": lam_minus,
+                "mp_lambda_plus": lam_plus,
+                "n_signal": n_signal,
+                "n_noise": n_noise,
+                "cleaned": True,
+            }
+        )
+
+    hist = _adaptive_spectrum_hist(raw_eigs) if raw_eigs is not None else {
         "counts": None, "edges": None, "n_above": 0, "above": [],
     }
 
@@ -202,15 +327,13 @@ def spectrum_spec(result, **_) -> dict:
         lo, hi = float(e[0]), float(e[-1])
         nb = len(hist["counts"])
         binwidth = (hi - lo) / nb if nb else 0.0
-        kde_x, kde_y = _kde_curve(
-            sp.get("eigenvalues"), lo, hi, int(np.sum(hist["counts"])), binwidth
-        )
+        kde_x, kde_y = _kde_curve(raw_eigs, lo, hi, int(np.sum(hist["counts"])), binwidth)
 
     return clean(
         {
             "kind": "spectrum",
             "label": result.label,
-            "eigenvalues": sp.get("eigenvalues"),
+            "eigenvalues": raw_eigs,
             "counts": hist["counts"],
             "edges": hist["edges"],
             "kde_x": kde_x,

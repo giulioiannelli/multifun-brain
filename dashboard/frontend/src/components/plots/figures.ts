@@ -159,19 +159,29 @@ export function buildSpectrum(spec: PlotSpec, opts: { yLog?: boolean; kde?: bool
   const counts: number[] | null = spec.counts ?? null;
   const lo = edges ? edges[0] : null;
   const hi = edges ? edges[edges.length - 1] : null;
+  const cleaned = spec.bulk_lo != null && spec.bulk_hi != null;
 
-  // MP bulk bounds, drawn only when they fall inside the displayed range.
   const shapes: any[] = [];
-  for (const [val, c] of [
-    [spec.mp_lambda_minus, "#888"],
-    [spec.mp_lambda_plus, "#D32F2F"],
-  ] as [number, string][]) {
-    if (val != null && lo != null && hi != null && val >= lo && val <= hi) {
-      shapes.push({
-        type: "line",
-        x0: val, x1: val, yref: "paper", y0: 0, y1: 1,
-        line: { color: c, width: 1.5, dash: "dash" },
-      });
+  if (cleaned) {
+    // Shade the MP noise bulk [λ-, λ+] — the eigenvalues the cleaning flattens.
+    shapes.push({
+      type: "rect", xref: "x", yref: "paper",
+      x0: spec.bulk_lo, x1: spec.bulk_hi, y0: 0, y1: 1,
+      fillcolor: "rgba(120,120,120,0.13)", line: { width: 0 }, layer: "below",
+    });
+  } else {
+    // Raw mode: MP bulk bounds drawn only when inside the displayed range.
+    for (const [val, c] of [
+      [spec.mp_lambda_minus, "#888"],
+      [spec.mp_lambda_plus, "#D32F2F"],
+    ] as [number, string][]) {
+      if (val != null && lo != null && hi != null && val >= lo && val <= hi) {
+        shapes.push({
+          type: "line",
+          x0: val, x1: val, yref: "paper", y0: 0, y1: 1,
+          line: { color: c, width: 1.5, dash: "dash" },
+        });
+      }
     }
   }
 
@@ -210,6 +220,23 @@ export function buildSpectrum(spec: PlotSpec, opts: { yLog?: boolean; kde?: bool
 
   if (opts.kde && spec.kde_x && spec.kde_y) {
     data.push(kdeTrace(spec.kde_x, spec.kde_y, opts.yLog));
+  }
+
+  // MP-cleaned mode: overlay the theoretical Marchenko–Pastur noise density.
+  if (spec.mp_curve_x && spec.mp_curve_y) {
+    const my = opts.yLog
+      ? spec.mp_curve_y.map((v: number) => Math.max(v, 0.5))
+      : spec.mp_curve_y;
+    data.push({
+      type: "scatter",
+      x: spec.mp_curve_x,
+      y: my,
+      mode: "lines",
+      line: { color: "#D32F2F", width: 2 },
+      name: "MP density",
+      hovertemplate: "λ ≈ %{x:.3g}<br>MP %{y:.1f}<extra>MP noise</extra>",
+      showlegend: false,
+    });
   }
 
   return {
