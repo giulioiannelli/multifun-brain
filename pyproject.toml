@@ -49,6 +49,10 @@ docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.5",
 ]
+dashboard = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
 viz = [
     "plotly>=5.0",
     "matplotlib>=3.6",
