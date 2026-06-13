@@ -9,7 +9,7 @@ React bundle is served from the same port, so collaborators open one URL.
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -26,6 +26,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def cache_control(request: Request, call_next):
+    """Stop the browser serving a stale bundle after a rebuild.
+
+    Hashed assets (``/assets/<name>-<hash>.js``) are immutable, so cache them
+    forever; ``index.html`` and API responses must always be revalidated so a
+    reload always loads the current build and fresh data.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    elif "/assets/" in path:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    else:
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 app.include_router(catalog_routes.router, prefix="/api")
 app.include_router(plots_routes.router, prefix="/api")
