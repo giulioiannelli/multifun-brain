@@ -5,9 +5,13 @@
 #   MFB_DASHBOARD_REBUILD=1 ./dashboard/run.sh   # force a frontend rebuild
 #   MFB_DASHBOARD_PORT=8001 ./dashboard/run.sh   # use a different port
 #   MFB_DASHBOARD_HOST=0.0.0.0 ./dashboard/run.sh   # share on the LAN (others open http://<your-ip>:8000)
+#   MFB_DASHBOARD_RELOAD=1 ./dashboard/run.sh    # dev: auto-reload backend on code changes (no manual restart)
 #
 # The build runs ONLY when there's no existing build (or you force it) — so
 # repeat launches start instantly instead of rebuilding every time.
+#
+# NOTE: a running server does NOT pick up new backend routes/code on its own.
+# After editing/pulling backend code, restart it (or use MFB_DASHBOARD_RELOAD=1).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,6 +61,15 @@ fi
 # 4. Serve everything from one port; open the browser best-effort.
 cd "$ROOT"
 echo "[dashboard] serving at ${URL}  (Ctrl-C to stop)"
+
+# Optional dev auto-reload: restart the backend when backend / library code
+# changes, so new routes load without a manual restart. Scoped to the code dirs
+# so the large data/ tree isn't watched.
+RELOAD_ARGS=()
+if [ "${MFB_DASHBOARD_RELOAD:-0}" = "1" ]; then
+  RELOAD_ARGS=(--reload --reload-dir "$ROOT/dashboard/backend" --reload-dir "$ROOT/multifunbrain")
+  echo "[dashboard] auto-reload ON — backend/library edits reload automatically."
+fi
 if [ "$HOST" = "0.0.0.0" ]; then
   # Best-effort: show a LAN URL collaborators can open from other machines.
   LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -70,4 +83,4 @@ fi
   fi
 ) >/dev/null 2>&1 &
 
-exec python -m uvicorn dashboard.backend.app:app --host "$HOST" --port "$PORT"
+exec python -m uvicorn dashboard.backend.app:app --host "$HOST" --port "$PORT" "${RELOAD_ARGS[@]}"
