@@ -6,7 +6,7 @@ import { SignalView } from "./views/SignalView";
 import type { Dataset } from "./types";
 
 // Signal (raw timecourses) comes first; the rest explore a computed result.
-const TABS = ["Signal", "Correlation", "Network", "LRG"] as const;
+const TABS = ["Signal", "Correlation", "Network", "Brain 3-D", "LRG"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {

@@ -2,11 +2,12 @@
 // tab is owned by App). Network and LRG expose a filter selector; LRG adds a tau
 // selector for the dendrogram.
 import { useEffect, useState } from "react";
+import { Brain3D } from "../components/plots/Brain3D";
 import { PlotPanel } from "../components/PlotPanel";
 import { usePlot } from "../hooks/usePlot";
 import type { QueryParams, ResultItem } from "../types";
 
-export type ExploreTab = "Correlation" | "Network" | "LRG";
+export type ExploreTab = "Correlation" | "Network" | "Brain 3-D" | "LRG";
 
 // In-panel toggles for a histogram: linear/log count axis + KDE overlay.
 function HistToggles({
@@ -74,6 +75,8 @@ export function ExploreView({
 }) {
   const [filter, setFilter] = useState<string | null>(null);
   const [tauIndex, setTauIndex] = useState<number>(-1);
+  const [brainMode, setBrainMode] = useState<"connectome" | "markers">("connectome");
+  const [edgeQuantile, setEdgeQuantile] = useState<number>(0.98);
   const [logScale, setLogScale] = useState<boolean>(false);
   const [specYLog, setSpecYLog] = useState<boolean>(true);
   const [specKde, setSpecKde] = useState<boolean>(true);
@@ -100,7 +103,7 @@ export function ExploreView({
 
   return (
     <div className="explore">
-      {(tab === "Network" || tab === "LRG") && filters.length > 0 && (
+      {(tab === "Network" || tab === "LRG" || tab === "Brain 3-D") && filters.length > 0 && (
         <div className="subbar">
           <label>
             Filter
@@ -112,6 +115,39 @@ export function ExploreView({
           </label>
           {tab === "LRG" && (
             <TauSelector params={fparams} value={tauIndex} onChange={setTauIndex} />
+          )}
+          {tab === "Brain 3-D" && (
+            <>
+              <div className="seg">
+                <span>View</span>
+                <button
+                  className={brainMode === "connectome" ? "active" : ""}
+                  onClick={() => setBrainMode("connectome")}
+                >
+                  Connectome
+                </button>
+                <button
+                  className={brainMode === "markers" ? "active" : ""}
+                  onClick={() => setBrainMode("markers")}
+                >
+                  Markers
+                </button>
+              </div>
+              {brainMode === "connectome" && (
+                <label>
+                  Edges
+                  <select
+                    value={edgeQuantile}
+                    onChange={(e) => setEdgeQuantile(Number(e.target.value))}
+                  >
+                    <option value={0.9}>top 10%</option>
+                    <option value={0.95}>top 5%</option>
+                    <option value={0.98}>top 2%</option>
+                    <option value={0.99}>top 1%</option>
+                  </select>
+                </label>
+              )}
+            </>
           )}
         </div>
       )}
@@ -192,6 +228,31 @@ export function ExploreView({
           <PlotPanel kind="degree_distribution" title="Degree distribution" params={fparams} />
           <PlotPanel kind="network" title="Network graph" params={fparams} wide />
           <PlotPanel kind="node_metrics" title="Node metrics" params={fparams} wide />
+        </div>
+      )}
+
+      {tab === "Brain 3-D" && (
+        <div className="plot-grid">
+          <section className="plot-card wide">
+            <div className="plot-head">
+              <h3>
+                3-D brain · {brainMode}
+                {filter ? ` · ${filter}` : ""}
+              </h3>
+            </div>
+            <p className="plot-caption">
+              {brainMode === "connectome"
+                ? "Strongest edges of the filtered network drawn between Schaefer parcel centroids (MNI). Drag to rotate, scroll to zoom."
+                : "Schaefer parcels coloured by their 7-network, on survivor centroids. Drag to rotate, scroll to zoom."}
+            </p>
+            <Brain3D
+              dataset={datasetId}
+              label={label}
+              filter={filter}
+              mode={brainMode}
+              edgeQuantile={edgeQuantile}
+            />
+          </section>
         </div>
       )}
 

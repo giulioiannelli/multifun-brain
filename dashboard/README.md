@@ -158,11 +158,14 @@ Hovering a node shows its Schaefer region name. That needs the atlas files under
 ```
 data/schaefer_2018/
 ├── Schaefer2018_100Parcels_7Networks_order.txt                       ← region names + 7-network groups
-└── Schaefer2018_100Parcels_7Networks_order_FSLMNI152_1mm.nii.gz      ← parcellation volume (for 3-D, later)
+└── Schaefer2018_100Parcels_7Networks_order_FSLMNI152_1mm.nii.gz      ← parcellation volume (parcel centroids for the 3-D brain)
 ```
 
 Dead regions (NaN rows dropped during preprocessing) are remapped so hover names
-stay aligned with the surviving nodes — no action needed.
+stay aligned with the surviving nodes — no action needed. The **Brain 3-D** tab
+derives parcel centroids from the NIfTI once (cached under `MFB_DASHBOARD_CACHE`)
+and renders an interactive nilearn connectome / markers view; it needs a
+WebGL-capable browser.
 
 ### 4.4 Raw timecourses (the **Signal** tab)
 

@@ -190,6 +190,19 @@ body {
   margin-bottom: 6px;
 }
 
+/* 3-D brain iframe (nilearn standalone page). nilearn renders a fixed-width
+   figure, so cap + centre the frame to avoid a wide empty margin. */
+.brain3d-frame {
+  display: block;
+  width: 100%;
+  max-width: 900px;
+  height: 640px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
 .hint {
   color: var(--muted);
   padding: 24px;

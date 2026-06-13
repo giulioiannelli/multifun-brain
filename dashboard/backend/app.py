@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config
+from .routes import brain3d as brain3d_routes
 from .routes import catalog as catalog_routes
 from .routes import plots as plots_routes
 from .routes import signal as signal_routes
@@ -50,6 +51,7 @@ async def cache_control(request: Request, call_next):
 app.include_router(catalog_routes.router, prefix="/api")
 app.include_router(plots_routes.router, prefix="/api")
 app.include_router(signal_routes.router, prefix="/api")
+app.include_router(brain3d_routes.router, prefix="/api")
 
 
 @app.get("/api/health")
