@@ -164,11 +164,32 @@ data/schaefer_2018/
 Dead regions (NaN rows dropped during preprocessing) are remapped so hover names
 stay aligned with the surviving nodes — no action needed.
 
+### 4.4 Raw timecourses (the **Signal** tab)
+
+The Signal tab plots the *raw* ROI timecourses (before any correlation), so it
+needs the AFNI `.ts.1D` files under `data/raw_data/` (override with
+`MFB_RAW_DATA_ROOT`), one folder per subject:
+
+```
+data/raw_data/                            ← MFB_RAW_DATA_ROOT
+├── sub-00246757/
+│   ├── ..._task-co2_run-02_..._desc-bpfBOLD.ts.1D
+│   ├── ..._task-rest_run-02_..._desc-optcom_bold.ts.1D
+│   └── ...                               ← one .ts.1D per (task, processing)
+└── sub-.../
+```
+
+Each file is `3dROIstats` output: `n_timepoints` rows × 100 region columns. The
+filename's `task-{co2|rest}` and `desc-{variant}` drive the Subject / Contrast /
+Processing selectors automatically; nothing else to configure. If the folder is
+absent the Signal tab simply says so and the other tabs still work.
+
 ### Environment overrides (summary)
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `MFB_RESULTS_ROOT` | `data/correlation_matrices_results/` | where result bundles are discovered |
+| `MFB_RAW_DATA_ROOT` | `data/raw_data/` | raw `.ts.1D` timecourses for the Signal tab |
 | `MFB_DATA_ROOT` | `data/` | allowlist boundary for ingestion (future) |
 | `MFB_ATLAS_DIR` | `data/schaefer_2018/` | Schaefer atlas assets |
 | `MFB_DASHBOARD_CACHE` | `dashboard/.cache/` | on-disk plot-spec / centroid cache |

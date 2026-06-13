@@ -52,6 +52,7 @@ docs = [
 dashboard = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
+    "emd>=0.6",  # Empirical Mode Decomposition for the Signal tab (IMF panel)
 ]
 viz = [
     "plotly>=5.0",

@@ -3,6 +3,7 @@
 // the matching renderer (Plotly figure / Cytoscape / table). Cytoscape is
 // lazy-loaded so non-network tabs never download it.
 import { lazy, Suspense, type ReactNode } from "react";
+import type { PlotEndpoint } from "../api/client";
 import { useInView } from "../hooks/useInView";
 import { usePlot } from "../hooks/usePlot";
 import type { PlotSpec, QueryParams } from "../types";
@@ -28,6 +29,12 @@ const FIGURE_BUILDERS: Record<string, Builder> = {
   dendrogram: F.buildDendrogram,
   partition_flow: F.buildPartitionFlow,
   sankey: F.buildSankey,
+  // Signal tab (raw timecourses)
+  signal_heatmap: F.buildSignalHeatmap,
+  signal_channel: F.buildSignalChannel,
+  signal_emd: F.buildSignalEMD,
+  cohort_bands: F.buildCohortBands,
+  signal_bands: F.buildBandReconstruction,
 };
 
 function PanelBody({
@@ -35,13 +42,15 @@ function PanelBody({
   params,
   figureOptions,
   square,
+  endpoint,
 }: {
   kind: string;
   params: QueryParams;
   figureOptions?: Record<string, any>;
   square?: boolean;
+  endpoint?: PlotEndpoint;
 }) {
-  const { spec, loading, error } = usePlot(kind, params);
+  const { spec, loading, error } = usePlot(kind, params, { endpoint });
   if (error) return <div className="plot-error">{error}</div>;
   if (loading && !spec) return <div className="hint">Loading…</div>;
   if (!spec) return null;
@@ -80,6 +89,7 @@ export function PlotPanel({
   figureOptions,
   caption,
   headerControls,
+  endpoint,
 }: {
   kind: string;
   title: string;
@@ -89,6 +99,7 @@ export function PlotPanel({
   figureOptions?: Record<string, any>;
   caption?: string;
   headerControls?: ReactNode;
+  endpoint?: PlotEndpoint;
 }) {
   const [ref, inView] = useInView<HTMLDivElement>();
   return (
@@ -99,7 +110,13 @@ export function PlotPanel({
       </div>
       {caption && <p className="plot-caption">{caption}</p>}
       {inView ? (
-        <PanelBody kind={kind} params={params} figureOptions={figureOptions} square={square} />
+        <PanelBody
+          kind={kind}
+          params={params}
+          figureOptions={figureOptions}
+          square={square}
+          endpoint={endpoint}
+        />
       ) : (
         <div className="hint">…</div>
       )}

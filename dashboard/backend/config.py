@@ -29,6 +29,10 @@ RESULTS_ROOT = _path_env(
 # Allowlist boundary for ingestion: only folders under here may be elaborated.
 DATA_ROOT = _path_env("MFB_DATA_ROOT", REPO_ROOT / "data")
 
+# Raw ROI timecourses (AFNI ``.ts.1D``) for the Signal tab. One directory per
+# subject, discovered recursively.
+RAW_DATA_ROOT = _path_env("MFB_RAW_DATA_ROOT", REPO_ROOT / "data" / "raw_data")
+
 # Schaefer atlas assets (region names + parcellation volume for 3-D).
 ATLAS_DIR = _path_env("MFB_ATLAS_DIR", REPO_ROOT / "data" / "schaefer_2018")
 ATLAS_ORDER_FILE = ATLAS_DIR / "Schaefer2018_100Parcels_7Networks_order.txt"

@@ -1,12 +1,12 @@
-// Single-result explorer with Descriptive / Network / LRG tabs. Network and LRG
-// tabs expose a filter selector; LRG adds a tau selector for the dendrogram.
+// Single-result explorer for the Correlation / Network / LRG tabs (the active
+// tab is owned by App). Network and LRG expose a filter selector; LRG adds a tau
+// selector for the dendrogram.
 import { useEffect, useState } from "react";
 import { PlotPanel } from "../components/PlotPanel";
 import { usePlot } from "../hooks/usePlot";
 import type { QueryParams, ResultItem } from "../types";
 
-const TABS = ["Descriptive", "Network", "LRG"] as const;
-type Tab = (typeof TABS)[number];
+export type ExploreTab = "Correlation" | "Network" | "LRG";
 
 // In-panel toggles for a histogram: linear/log count axis + KDE overlay.
 function HistToggles({
@@ -62,15 +62,16 @@ function TauSelector({
 }
 
 export function ExploreView({
+  tab,
   datasetId,
   label,
   item,
 }: {
+  tab: ExploreTab;
   datasetId: string | null;
   label: string | null;
   item: ResultItem | null;
 }) {
-  const [tab, setTab] = useState<Tab>("Descriptive");
   const [filter, setFilter] = useState<string | null>(null);
   const [tauIndex, setTauIndex] = useState<number>(-1);
   const [logScale, setLogScale] = useState<boolean>(false);
@@ -99,14 +100,6 @@ export function ExploreView({
 
   return (
     <div className="explore">
-      <div className="tabs">
-        {TABS.map((t) => (
-          <button key={t} className={t === tab ? "active" : ""} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
-      </div>
-
       {(tab === "Network" || tab === "LRG") && filters.length > 0 && (
         <div className="subbar">
           <label>
@@ -123,7 +116,7 @@ export function ExploreView({
         </div>
       )}
 
-      {tab === "Descriptive" && (
+      {tab === "Correlation" && (
         <div className="subbar">
           <div className="seg">
             <span>Matrix colour scale</span>
@@ -146,7 +139,7 @@ export function ExploreView({
         </div>
       )}
 
-      {tab === "Descriptive" && (
+      {tab === "Correlation" && (
         <div className="plot-grid">
           <PlotPanel
             kind="heatmap"

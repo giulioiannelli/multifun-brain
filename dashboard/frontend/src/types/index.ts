@@ -24,6 +24,23 @@ export interface CatalogResponse {
   datasets: Dataset[];
 }
 
+// Signal tab: raw ROI timecourses, keyed by (subject, contrast, processing).
+export interface SignalEntry {
+  subject: string;
+  contrast: string;
+  processing: string;
+}
+
+export interface SignalCatalog {
+  entries: SignalEntry[];
+  subjects: string[];
+  contrasts: string[];
+  processings: string[];
+  region_names: string[];
+  n_regions: number;
+  root: string;
+}
+
 // Plot specs are heterogeneous; we type them loosely and narrow per builder.
 export type PlotSpec = Record<string, any>;
 

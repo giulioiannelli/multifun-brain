@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api/client";
 import { SelectorBar } from "./components/SelectorBar";
-import { ExploreView } from "./views/ExploreView";
+import { ExploreView, type ExploreTab } from "./views/ExploreView";
+import { SignalView } from "./views/SignalView";
 import type { Dataset } from "./types";
+
+// Signal (raw timecourses) comes first; the rest explore a computed result.
+const TABS = ["Signal", "Correlation", "Network", "LRG"] as const;
+type Tab = (typeof TABS)[number];
 
 export default function App() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [label, setLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("Signal");
 
   useEffect(() => {
     api
@@ -37,6 +43,8 @@ export default function App() {
     return ds?.items.find((it) => it.label === label) ?? null;
   }, [datasets, datasetId, label]);
 
+  const isSignal = tab === "Signal";
+
   return (
     <div className="app">
       <header className="topbar">
@@ -44,17 +52,36 @@ export default function App() {
         <span className="subtitle">results dashboard</span>
       </header>
 
+      <div className="tabs">
+        {TABS.map((t) => (
+          <button key={t} className={t === tab ? "active" : ""} onClick={() => setTab(t)}>
+            {t}
+          </button>
+        ))}
+      </div>
+
       {error && <div className="plot-error">Failed to load catalog: {error}</div>}
 
-      <SelectorBar
-        datasets={datasets}
-        datasetId={datasetId}
-        label={label}
-        onSelect={handleSelect}
-      />
+      {!isSignal && (
+        <SelectorBar
+          datasets={datasets}
+          datasetId={datasetId}
+          label={label}
+          onSelect={handleSelect}
+        />
+      )}
 
       <main className="content">
-        <ExploreView datasetId={datasetId} label={label} item={item} />
+        {isSignal ? (
+          <SignalView />
+        ) : (
+          <ExploreView
+            tab={tab as ExploreTab}
+            datasetId={datasetId}
+            label={label}
+            item={item}
+          />
+        )}
       </main>
     </div>
   );

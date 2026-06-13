@@ -1,6 +1,6 @@
 // Thin typed fetch wrappers around the FastAPI backend. All calls go through
 // the same-origin /api prefix (Vite proxies it in dev; FastAPI serves it in prod).
-import type { CatalogResponse, PlotSpec, QueryParams } from "../types";
+import type { CatalogResponse, PlotSpec, QueryParams, SignalCatalog } from "../types";
 
 const BASE = "/api";
 
@@ -25,4 +25,15 @@ export const api = {
   catalog: () => getJSON<CatalogResponse>("/catalog"),
   plot: (kind: string, params: QueryParams) =>
     getJSON<PlotSpec>(`/plot/${kind}`, params),
+  // Signal tab (raw timecourses) lives under its own /signal endpoint.
+  signalCatalog: () => getJSON<SignalCatalog>("/signal/catalog"),
+  signal: (kind: string, params: QueryParams) =>
+    getJSON<PlotSpec>(`/signal/${kind}`, params),
+};
+
+// The plot fetchers share a (kind, params) -> spec shape so usePlot can pick one.
+export type PlotEndpoint = "plot" | "signal";
+export const PLOT_FETCHERS: Record<PlotEndpoint, (kind: string, params: QueryParams) => Promise<PlotSpec>> = {
+  plot: api.plot,
+  signal: api.signal,
 };
