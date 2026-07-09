@@ -15,6 +15,7 @@ pickle batch; raw timecourses are a different artefact with a different layout.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -28,9 +29,11 @@ __all__ = [
     "SAMPLING_INTERVAL_SECONDS",
     "TimecourseFile",
     "discover_timecourses",
+    "load_acquisition_metadata",
     "load_timecourses",
     "parse_timecourse_filename",
     "sampling_rate",
+    "sampling_rate_for",
 ]
 
 CONTRASTS = ("co2", "rest")
@@ -66,6 +69,57 @@ def sampling_rate(processing: str) -> float:
     """
     tr = SAMPLING_INTERVAL_SECONDS.get(processing)
     return 1.0 / tr if tr else 1.0
+
+
+def load_acquisition_metadata(raw_root: str | Path) -> dict[int, dict]:
+    """Per-protocol acquisition parameters for a raw dataset, keyed by N timepoints.
+
+    Reads ``<raw_root>/acquisition.json`` — a JSON object with a ``"protocols"``
+    list of ``{"n_timepoints", "tr_seconds", "modality", "condition",
+    "voxel_mm"}`` records — and returns ``{n_timepoints: record}``. The timepoint
+    count is the reliable discriminator between protocols (e.g. BOLD 488 / VASO
+    444 / ASL 110 in the ``kw`` datasets). Returns an empty dict when the file is
+    absent or unparseable: ``data/`` is gitignored, so this file ships with the
+    collaborator data, not the repo, and callers fall back to other TR sources.
+    """
+    path = Path(raw_root) / "acquisition.json"
+    if not path.is_file():
+        return {}
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    out: dict[int, dict] = {}
+    for rec in doc.get("protocols", []):
+        n = rec.get("n_timepoints")
+        if isinstance(n, int):
+            out[n] = rec
+    return out
+
+
+def sampling_rate_for(
+    raw_root: str | Path | None,
+    n_timepoints: int | None,
+    processing: str | None = None,
+) -> float:
+    """Sampling frequency ``fs = 1/TR`` (Hz), resolved in priority order.
+
+    1. ``acquisition.json`` under *raw_root*, matched by *n_timepoints* (the
+       per-protocol discriminator for the ``kw`` datasets).
+    2. The per-variant April map (:data:`SAMPLING_INTERVAL_SECONDS`) by the
+       *processing* token.
+    3. ``1.0`` (cycles/sample) when nothing matches — callers degrade gracefully.
+    """
+    if raw_root is not None and n_timepoints is not None:
+        rec = load_acquisition_metadata(raw_root).get(int(n_timepoints))
+        tr = rec.get("tr_seconds") if rec else None
+        if tr:
+            return 1.0 / tr
+    if processing:
+        tr = SAMPLING_INTERVAL_SECONDS.get(processing)
+        if tr:
+            return 1.0 / tr
+    return 1.0
 
 
 # Longest-first alternation so ``optcomMIRDenoised_bold`` is matched before the

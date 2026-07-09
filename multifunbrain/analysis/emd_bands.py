@@ -39,6 +39,7 @@ __all__ = [
     "CANONICAL_BANDS",
     "BandScheme",
     "assign_imfs",
+    "band_correlation_matrices",
     "canonical_scheme",
     "estimate_band_edges",
     "reconstruct_bands",
@@ -220,3 +221,60 @@ def reconstruct_bands(imfs, freqs, bands: dict) -> tuple[dict, dict]:
         idx = assignment[name]
         signals[name] = imfs[:, idx].sum(axis=1) if idx else np.zeros(n_samples)
     return signals, assignment
+
+
+def band_correlation_matrices(
+    timecourses, sample_rate: float = 1.0, scheme: BandScheme | None = None
+) -> dict[str, np.ndarray]:
+    """Per-band Pearson correlation matrices from raw ROI timecourses.
+
+    Returns ``{"full": C, "s5": C5, "s4": C4, "sstar": Cstar}`` where ``"full"``
+    is the broadband correlation of *timecourses* and each band matrix is the
+    correlation of the per-band reconstructed timecourses (each ROI's IMFs summed
+    within that band — see :func:`reconstruct_bands`). This is the single
+    canonical "raw ROI matrix → per-band correlation matrices" step used by the
+    raw-ingest pipeline.
+
+    Parameters
+    ----------
+    timecourses : array-like, shape (n_regions, n_timepoints)
+        Region-major ROI timecourses (as returned by
+        :func:`multifunbrain.io.load_timecourses`).
+    sample_rate : float, default 1.0
+        ``fs = 1/TR`` (Hz) so IMF characteristic frequencies match the canonical
+        Hz bands; ``1.0`` leaves frequencies in cycles/sample.
+    scheme : BandScheme or None
+        Band edges; defaults to :func:`canonical_scheme` (fixed Hz edges).
+
+    Notes
+    -----
+    A band with no IMFs for a given ROI contributes an all-zero row, so a band
+    that is (near-)empty across ROIs yields a degenerate (constant/NaN)
+    correlation matrix — expected for bands above the Nyquist limit
+    (``sample_rate / 2``) of slow acquisitions. The downstream pipeline drops such
+    degenerate rows and records the matrix as a graceful failure if too few
+    regions survive.
+    """
+    from .corrnet import compute_correlation_matrix
+
+    ts = np.asarray(timecourses, dtype=float)
+    if ts.ndim != 2:
+        raise ValueError(
+            "timecourses must be 2-D (n_regions, n_timepoints), got "
+            f"shape {ts.shape}"
+        )
+    scheme = scheme or canonical_scheme()
+    bands = scheme.bands
+    n_regions, n_timepoints = ts.shape
+
+    band_ts = {name: np.zeros((n_regions, n_timepoints)) for name in BAND_ORDER}
+    for i in range(n_regions):
+        imfs, freqs = sift_with_frequencies(ts[i], sample_rate)
+        signals, _ = reconstruct_bands(imfs, freqs, bands)
+        for name in BAND_ORDER:
+            band_ts[name][i] = signals[name]
+
+    out = {"full": compute_correlation_matrix(ts)}
+    for name in BAND_ORDER:
+        out[name] = compute_correlation_matrix(band_ts[name])
+    return out

@@ -16,9 +16,11 @@ from .timeseries import (
     SAMPLING_INTERVAL_SECONDS,
     TimecourseFile,
     discover_timecourses,
+    load_acquisition_metadata,
     load_timecourses,
     parse_timecourse_filename,
     sampling_rate,
+    sampling_rate_for,
 )
 
 __all__ = [
@@ -26,9 +28,11 @@ __all__ = [
     "ResultsCollection",
     "TimecourseFile",
     "discover_timecourses",
+    "load_acquisition_metadata",
     "load_correlation_matrix",
     "load_results",
     "load_timecourses",
     "parse_timecourse_filename",
     "sampling_rate",
+    "sampling_rate_for",
 ]

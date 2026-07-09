@@ -48,13 +48,22 @@ def parse_label(label: str) -> dict:
 
 
 def dataset_dir(dataset_id: str) -> Path | None:
-    """Resolve a dataset id to its directory, or ``None`` if invalid/outside root."""
+    """Resolve a dataset id to its directory, or ``None`` if invalid/outside root.
+
+    The results root itself is **not** a dataset (only named sub-directories are;
+    see :func:`list_datasets`), so an empty / ``"."`` id — or any id that resolves
+    back to the root, e.g. ``"april/.."`` — is rejected, as is path traversal.
+    """
     root = config.RESULTS_ROOT.resolve()
-    candidate = (root if dataset_id in (".", "") else root / dataset_id).resolve()
+    if dataset_id in (".", ""):
+        return None
+    candidate = (root / dataset_id).resolve()
     try:
         candidate.relative_to(root)
     except ValueError:
         return None  # path traversal attempt
+    if candidate == root:
+        return None  # resolved back to the root (not a named dataset)
     if not (candidate / "results.pkl").is_file():
         return None
     return candidate
@@ -73,7 +82,13 @@ def list_datasets() -> list[dict]:
     for pkl in sorted(root.rglob("results.pkl")):
         directory = pkl.parent
         rel = directory.relative_to(root)
-        ds_id = "." if str(rel) == "." else str(rel).replace("\\", "/")
+        # Only named sub-directories are datasets. A bundle sitting directly at
+        # the results root has no dataset/category name — it surfaced as the
+        # confusing "(root)" entry and breaks the Dataset/Category structure — so
+        # skip it. Move such a bundle into a named subfolder to surface it.
+        if str(rel) == ".":
+            continue
+        ds_id = str(rel).replace("\\", "/")
         try:
             rc = get_results(directory)
         except Exception as exc:  # noqa: BLE001 - surface, don't crash discovery
