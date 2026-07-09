@@ -12,6 +12,7 @@ expose its actual network labels.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -60,6 +61,34 @@ def load_atlas(order_file: str | None = None) -> tuple[Region, ...]:
 
 def region_count() -> int:
     return len(load_atlas())
+
+
+@lru_cache(maxsize=2)
+def harvard_oxford_names(xml_file: str | None = None) -> tuple[str, ...]:
+    """Region names (in 0-based index order) from the HarvardOxford-Cortical
+    FSL atlas XML — the channel labels for the 48-parcel raw set.
+
+    The XML is ``<label index="i" …>Name</label>`` per parcel; we return the
+    names sorted by ``index``. Returns an empty tuple when the file is absent or
+    unparseable (``data/`` is gitignored, so the XML ships with the collaborator
+    data, not the repo), letting callers fall back to generic ``region-N``
+    labels instead of failing.
+    """
+    path = Path(xml_file) if xml_file else config.HARVARD_OXFORD_XML
+    if not path.exists():
+        return ()
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError:
+        return ()
+    labels: list[tuple[int, str]] = []
+    for label in root.findall(".//label"):
+        idx = label.get("index")
+        if idx is None:
+            continue
+        labels.append((int(idx), (label.text or "").strip()))
+    labels.sort(key=lambda t: t[0])
+    return tuple(name for _, name in labels)
 
 
 @lru_cache(maxsize=1)

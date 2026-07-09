@@ -1,10 +1,11 @@
 // Signal tab: raw ROI timecourses straight from the .ts.1D hand-off (no
-// pipeline). Two modes:
+// pipeline). A Dataset dropdown switches between the raw_data_<id> sets. Two
+// modes (when the dataset has a co2/rest contrast):
 //   • Per subject — carpet + single channel + EMD + per-band reconstruction.
 //   • Cohort (EMD bands) — histogram of every IMF's characteristic frequency
-//     pooled across the cohort, which *defines* the s5/s4/s* bands.
-// Subject / Channel selectors are per-subject only; Contrast / Processing are
-// shared. The selectors are independent of the result-bundle SelectorBar.
+//     pooled across the cohort, defining the s5/s4/s* bands.
+// The older kw datasets have no contrast / no TR, so only the per-subject
+// carpet + channel + EMD views show for them (no cohort / band analysis).
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { PlotPanel } from "../components/PlotPanel";
@@ -17,6 +18,7 @@ export function SignalView() {
   const [cat, setCat] = useState<SignalCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [dataset, setDataset] = useState<string>(""); // "" = server default
   const [mode, setMode] = useState<Mode>("subject");
   const [subject, setSubject] = useState<string>("");
   const [contrast, setContrast] = useState<string>("");
@@ -24,23 +26,32 @@ export function SignalView() {
   const [channel, setChannel] = useState<number>(0);
   const [normalize, setNormalize] = useState<boolean>(true);
   const [bandsYLog, setBandsYLog] = useState<boolean>(false);
+  const [scheme, setScheme] = useState<"canonical" | "data_driven">("canonical");
 
+  // (Re)load the catalog when the dataset changes; reset facets to its first entry.
   useEffect(() => {
+    let cancelled = false;
+    setError(null);
     api
-      .signalCatalog()
+      .signalCatalog(dataset || undefined)
       .then((c) => {
+        if (cancelled) return;
         setCat(c);
         const first = c.entries[0];
         if (first) {
           setSubject(first.subject);
-          setContrast(first.contrast);
+          setContrast(first.contrast ?? "");
           setProcessing(first.processing);
         }
+        setChannel(0);
       })
-      .catch((e) => setError(String(e)));
-  }, []);
+      .catch((e) => !cancelled && setError(String(e)));
+    return () => {
+      cancelled = true;
+    };
+  }, [dataset]);
 
-  // Keep the (subject, contrast, processing) triple on a real file.
+  // Keep (subject, contrast, processing) on a real file within the dataset.
   useEffect(() => {
     if (!cat || !cat.entries.length || !subject) return;
     const exact = cat.entries.some(
@@ -60,52 +71,66 @@ export function SignalView() {
 
   const names = cat?.region_names ?? [];
   const channelName = names[channel] ?? `region ${channel}`;
+  const hasContrast = cat?.has_contrast ?? true;
+  const effMode: Mode = hasContrast ? mode : "subject"; // cohort needs a contrast
 
   const fileParams: QueryParams = useMemo(
-    () => ({ subject, contrast, processing }),
-    [subject, contrast, processing],
+    () => ({ dataset, subject, contrast, processing }),
+    [dataset, subject, contrast, processing],
   );
   const channelParams: QueryParams = useMemo(
-    () => ({ subject, contrast, processing, channel }),
-    [subject, contrast, processing, channel],
+    () => ({ dataset, subject, contrast, processing, channel }),
+    [dataset, subject, contrast, processing, channel],
   );
   const cohortParams: QueryParams = useMemo(
-    () => ({ contrast, processing }),
-    [contrast, processing],
+    () => ({ dataset, contrast, processing, scheme }),
+    [dataset, contrast, processing, scheme],
+  );
+  // Band reconstruction also depends on the scheme (channel/EMD panels don't).
+  const bandParams: QueryParams = useMemo(
+    () => ({ dataset, subject, contrast, processing, channel, scheme }),
+    [dataset, subject, contrast, processing, channel, scheme],
   );
 
   if (error) return <div className="plot-error">Failed to load raw timecourses: {error}</div>;
   if (!cat) return <div className="hint">Loading raw timecourses…</div>;
-  if (!cat.entries.length)
-    return (
-      <div className="hint">
-        No raw timecourses found under <code>{cat.root}</code>. Drop the per-subject
-        <code> .ts.1D</code> folders there (see dashboard/README.md).
-      </div>
-    );
 
-  const ready = Boolean(contrast && processing && (mode === "cohort" || subject));
+  const ready = Boolean(processing && (effMode === "cohort" || subject));
 
   return (
     <div className="explore">
       <div className="subbar">
-        <div className="seg">
-          <span>Mode</span>
-          <button className={mode === "subject" ? "active" : ""} onClick={() => setMode("subject")}>
-            Per subject
-          </button>
-          <button className={mode === "cohort" ? "active" : ""} onClick={() => setMode("cohort")}>
-            Cohort (EMD bands)
-          </button>
-        </div>
         <label>
-          Contrast
-          <select value={contrast} onChange={(e) => setContrast(e.target.value)}>
-            {cat.contrasts.map((c) => (
-              <option key={c} value={c}>{CONTRAST_LABEL[c] ?? c}</option>
+          Dataset
+          <select value={dataset || cat.dataset} onChange={(e) => setDataset(e.target.value)}>
+            {cat.datasets.map((d) => (
+              <option key={d.id} value={d.id}>
+                {`${d.label} · ${d.n_subjects} subj${d.has_contrast ? "" : " · no contrast"}`}
+              </option>
             ))}
           </select>
         </label>
+        {hasContrast && (
+          <div className="seg">
+            <span>Mode</span>
+            <button className={mode === "subject" ? "active" : ""} onClick={() => setMode("subject")}>
+              Per subject
+            </button>
+            <button className={mode === "cohort" ? "active" : ""} onClick={() => setMode("cohort")}>
+              Cohort (EMD bands)
+            </button>
+          </div>
+        )}
+        {hasContrast && (
+          <label>
+            Contrast
+            <select value={contrast} onChange={(e) => setContrast(e.target.value)}>
+              {cat.contrasts.map((c) => (
+                <option key={c} value={c}>{CONTRAST_LABEL[c] ?? c}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Processing
           <select value={processing} onChange={(e) => setProcessing(e.target.value)}>
@@ -114,9 +139,27 @@ export function SignalView() {
             ))}
           </select>
         </label>
+        {hasContrast && (
+          <div className="seg">
+            <span>Bands</span>
+            <button className={scheme === "canonical" ? "active" : ""} onClick={() => setScheme("canonical")}>
+              Canonical
+            </button>
+            <button className={scheme === "data_driven" ? "active" : ""} onClick={() => setScheme("data_driven")}>
+              Data-driven
+            </button>
+          </div>
+        )}
       </div>
 
-      {!ready ? null : mode === "cohort" ? (
+      {!cat.entries.length ? (
+        <div className="hint">
+          No raw timecourses found in <code>{cat.dataset}</code> (<code>{cat.root}</code>).
+          Either the folder is empty, or its files use a filename scheme the reader
+          doesn't parse yet (the kw HarvardOxford/Nov-2025 sets are supported; other
+          schemes need a reader update).
+        </div>
+      ) : !ready ? null : effMode === "cohort" ? (
         <>
           <div className="subbar">
             <div className="seg">
@@ -131,8 +174,17 @@ export function SignalView() {
               title="IMF frequency spectrum (cohort)"
               endpoint="signal"
               params={cohortParams}
-              figureOptions={{ yLog: bandsYLog }}
-              caption="Every IMF's characteristic frequency (amplitude-weighted mean instantaneous frequency, cycles/sample) pooled across all subjects and ROIs. The shaded s5 / s4 / s* bands are the data-driven edges — geometric midpoints between the per-IMF-index clusters (dotted). First load runs EMD over the whole cohort (a few seconds)."
+              figureOptions={{ yLog: bandsYLog, variant: "freq" }}
+              caption="Every IMF's characteristic frequency — median instantaneous frequency (HHT), in Hz via the per-variant TR (bpf 1.353 s, optcom/MIR 0.98 s) — pooled across all subjects and ROIs. Bands: Canonical = the collaborator's fixed slow-oscillation edges (Slow-5 0.010–0.027, Slow-4 0.027–0.073, S* 0.073–0.180 Hz); Data-driven = geometric midpoints between the per-IMF-index clusters (dotted). First load runs EMD over the whole cohort (a few seconds)."
+              wide
+            />
+            <PlotPanel
+              kind="cohort_bands"
+              title="IMF period spectrum (cohort)"
+              endpoint="signal"
+              params={cohortParams}
+              figureOptions={{ yLog: bandsYLog, variant: "period" }}
+              caption="The same characteristic frequencies expressed as periods (1/f, seconds) — the collaborator's companion panel. The shaded bands are the period ranges of Slow-5 / Slow-4 / S*."
               wide
             />
           </div>
@@ -162,7 +214,7 @@ export function SignalView() {
               endpoint="signal"
               params={fileParams}
               figureOptions={{ normalize }}
-              caption="Each row is one Schaefer region; columns are timepoints. z-score normalises per region so temporal dynamics drive the grayscale. In Raw mode the scale spans every region's absolute level, so between-region baseline differences dominate and each row looks like a near-uniform stripe — switch to z-score to see within-region dynamics."
+              caption="Each row is one region; columns are timepoints. z-score normalises per region so temporal dynamics drive the grayscale. In Raw mode the scale spans every region's absolute level, so between-region baseline differences dominate and each row looks like a near-uniform stripe — switch to z-score to see within-region dynamics."
               wide
             />
           </div>
@@ -194,14 +246,16 @@ export function SignalView() {
               caption="Empirical Mode Decomposition (emd.sift.sift) of the selected channel into Intrinsic Mode Functions — fast oscillations at the top down to the slow trend / residual at the bottom."
               wide
             />
-            <PlotPanel
-              kind="signal_bands"
-              title={`Band reconstruction · ${channelName}`}
-              endpoint="signal"
-              params={channelParams}
-              caption="Each band's signal is the sum of this channel's IMFs whose characteristic frequency falls in that band (edges from the cohort spectrum) — the per-band signals behind the per-band correlation matrices."
-              wide
-            />
+            {hasContrast && (
+              <PlotPanel
+                kind="signal_bands"
+                title={`Band reconstruction · ${channelName}`}
+                endpoint="signal"
+                params={bandParams}
+                caption="Each band's signal is the sum of this channel's IMFs whose characteristic frequency (median IF, Hz) falls in that band — the per-band signals behind the per-band correlation matrices. Bands follow the selected scheme (Canonical = the collaborator's fixed edges; Data-driven = cohort clusters)."
+                wide
+              />
+            )}
           </div>
         </>
       )}

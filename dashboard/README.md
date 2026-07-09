@@ -170,11 +170,11 @@ WebGL-capable browser.
 ### 4.4 Raw timecourses (the **Signal** tab)
 
 The Signal tab plots the *raw* ROI timecourses (before any correlation), so it
-needs the AFNI `.ts.1D` files under `data/raw_data/` (override with
+needs the AFNI `.ts.1D` files under a raw-data root (override with
 `MFB_RAW_DATA_ROOT`), one folder per subject:
 
 ```
-data/raw_data/                            ← MFB_RAW_DATA_ROOT
+data/raw_data_schaefer100_april2026/      ← MFB_RAW_DATA_ROOT (default)
 ├── sub-00246757/
 │   ├── ..._task-co2_run-02_..._desc-bpfBOLD.ts.1D
 │   ├── ..._task-rest_run-02_..._desc-optcom_bold.ts.1D
@@ -187,14 +187,46 @@ filename's `task-{co2|rest}` and `desc-{variant}` drive the Subject / Contrast /
 Processing selectors automatically; nothing else to configure. If the folder is
 absent the Signal tab simply says so and the other tabs still work.
 
+**Raw-dataset naming.** Raw sets follow `raw_data_<atlas><batch>` so they're
+identifiable at a glance. Three exist:
+
+| Directory | Atlas | Filename scheme | Signal tab |
+|---|---|---|---|
+| `raw_data_schaefer100_april2026` | Schaefer 100 | BIDS `sub-/ses-/task-/desc-` | ✅ full (carpet · channel · EMD · cohort/band) |
+| `raw_data_schaefer100_november2025` | Schaefer 100 | AFNI `kw…` | ✅ carpet · channel · EMD |
+| `raw_data_harvardoxford48` | HarvardOxford 48 | AFNI `kw…` | ✅ carpet · channel · EMD |
+
+All three are selectable from the **Dataset** dropdown in the Signal tab. The
+reader handles both filename schemes (BIDS, and the older ``kw…``: subject from
+the parent folder, modality token as the processing facet, no co2/rest; empty
+``*4D`` placeholder files and any ``discarded/`` subtree are skipped). The older
+two have no contrast and no known TR, so the **cohort histogram / per-band
+reconstruction** (which need a contrast + Hz) stay April-only. Channel names come
+from each set's atlas: the Schaefer order file for the Schaefer-100 sets, and the
+**HarvardOxford cortical** FSL label XML (``data/HarvardOxford-Cortical.xml``,
+override ``MFB_HARVARD_OXFORD_XML``) for the 48-parcel set — so a channel reads
+e.g. *"Heschl's Gyrus"* rather than *region-44*. If that XML is absent the labels
+fall back to generic ``region-N``. `MFB_RAW_DATA_ROOT` sets which dataset is the
+default.
+
+**EMD frequency bands.** The cohort histogram and per-band reconstruction follow
+the collaborator's notebook: each IMF's characteristic frequency is its **median
+instantaneous frequency** (HHT) in **Hz**, using the per-variant TR (`bpf*`
+1.353 s, `optcom/MIR*` 0.98 s → `fs = 1/TR`). IMFs are classified into the fixed
+**canonical** slow-oscillation bands (Slow-5 `0.010–0.027`, Slow-4
+`0.027–0.073`, S\* `0.073–0.180` Hz). A **Bands** toggle switches to
+**data-driven** edges (geometric midpoints between the per-IMF clusters) for
+comparison — on the April cohort the two nearly coincide.
+
 ### Environment overrides (summary)
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `MFB_RESULTS_ROOT` | `data/correlation_matrices_results/` | where result bundles are discovered |
-| `MFB_RAW_DATA_ROOT` | `data/raw_data/` | raw `.ts.1D` timecourses for the Signal tab |
+| `MFB_RAW_DATA_ROOT` | `data/raw_data_schaefer100_april2026/` | raw `.ts.1D` timecourses for the Signal tab |
 | `MFB_DATA_ROOT` | `data/` | allowlist boundary for ingestion (future) |
 | `MFB_ATLAS_DIR` | `data/schaefer_2018/` | Schaefer atlas assets |
+| `MFB_HARVARD_OXFORD_XML` | `data/HarvardOxford-Cortical.xml` | FSL labels → channel names for the HarvardOxford-48 raw set |
 | `MFB_DASHBOARD_CACHE` | `dashboard/.cache/` | on-disk plot-spec / centroid cache |
 | `MFB_DASHBOARD_PORT` | `8000` | server port |
 | `MFB_DASHBOARD_HOST` | `127.0.0.1` | bind address; set `0.0.0.0` to share on the LAN (§3.1) |
@@ -228,6 +260,12 @@ cd dashboard/frontend && npm run dev      # http://localhost:5173
 - **Done**: catalog + tabbed Explore view (descriptive · network · LRG) with the
   interactive correlation heatmap, atlas-name hover, Cytoscape 2-D network, and
   LRG dendrogram / partition-flow / Sankey.
+- **Done**: the **Pipeline** tab — a static, data-free methodology scheme
+  (boxes-and-arrows knowledge tree). A *Current* view lays out the implemented
+  chain in two owner lanes (Daniele's signal→EMD→bands front end handing off to
+  Giulio's signed-descriptive → unsigned-filtering → LRG → metrics back end); a
+  *Proposed* view shows the full CO₂-vs-rest comparison vision converging on the
+  differential-node lens. Pure React/SVG/CSS, no backend (`views/PipelineView.tsx`).
 - **Planned**: interactive 3-D brain, comparison views (CO2 vs rest, per-patient
   vs average, across variants/bands, two patients side by side), and the
   drop-a-folder ingestion workflow. See the project plan for the roadmap.

@@ -594,21 +594,33 @@ const BAND_FILL: Record<string, string> = {
   s5: "rgba(233,30,99,0.12)", s4: "rgba(67,160,71,0.12)", sstar: "rgba(249,168,37,0.16)",
 };
 
-// Cohort IMF-frequency spectrum: histogram of every IMF's characteristic
-// frequency (cycles/sample) pooled across subjects/ROIs, with the data-driven
-// s5/s4/s* band ranges shaded and the per-IMF-index cluster centres marked.
-// Reconstructs Daniele's frequency histogram; this is what *defines* the bands.
-export function buildCohortBands(spec: PlotSpec, opts: { yLog?: boolean } = {}): Figure {
-  const edges: number[] = spec.edges ?? [];
-  const counts: number[] = spec.counts ?? [];
-  const bands: Record<string, [number, number]> = spec.bands ?? {};
+// Cohort IMF spectrum: histogram of every IMF's characteristic frequency
+// (median instantaneous frequency, Hz, fs = 1/TR) pooled across subjects/ROIs,
+// with the s5/s4/s* band ranges shaded and the per-IMF-index cluster centres
+// marked. Reconstructs the collaborator's figure. opts.variant picks the
+// frequency panel ("freq", default) or its 1/f companion period panel
+// ("period", seconds); bands are stored in Hz and converted as needed.
+export function buildCohortBands(
+  spec: PlotSpec,
+  opts: { yLog?: boolean; variant?: "freq" | "period" } = {},
+): Figure {
+  const isPeriod = opts.variant === "period";
+  const edges: number[] = (isPeriod ? spec.period_edges : spec.edges) ?? [];
+  const counts: number[] = (isPeriod ? spec.period_counts : spec.counts) ?? [];
+  const bandsHz: Record<string, [number, number]> = spec.bands ?? {};
   const centers = binCenters(edges);
   const widths = edges.slice(1).map((e, i) => e - edges[i]);
+  const scheme = spec.scheme === "data_driven" ? "data-driven" : "canonical";
 
-  const bandOf = (f: number): string => {
+  // A Hz band [lo,hi] becomes the period range [1/hi, 1/lo].
+  const bandRange = (r: [number, number]): [number, number] =>
+    isPeriod ? [1 / r[1], 1 / r[0]] : [r[0], r[1]];
+  // Which band a plotted x falls in (period values map back to Hz first).
+  const bandOf = (x: number): string => {
+    const f = isPeriod ? 1 / x : x;
     for (const name of BAND_NAMES) {
-      const r = bands[name];
-      if (r && f >= r[0] && f < r[1]) return name;
+      const r = bandsHz[name];
+      if (r && f >= r[0] && f <= r[1]) return name;
     }
     return "drift";
   };
@@ -617,15 +629,16 @@ export function buildCohortBands(spec: PlotSpec, opts: { yLog?: boolean } = {}):
   const shapes: any[] = [];
   const annotations: any[] = [];
   for (const name of BAND_NAMES) {
-    const r = bands[name];
+    const r = bandsHz[name];
     if (!r) continue;
+    const [x0, x1] = bandRange(r);
     shapes.push({
       type: "rect", xref: "x", yref: "paper",
-      x0: r[0], x1: r[1], y0: 0, y1: 1,
+      x0, x1, y0: 0, y1: 1,
       fillcolor: BAND_FILL[name], line: { width: 0 }, layer: "below",
     });
     annotations.push({
-      x: Math.sqrt(r[0] * r[1]), xref: "x", yref: "paper", y: 0.98, yanchor: "top",
+      x: Math.sqrt(x0 * x1), xref: "x", yref: "paper", y: 0.98, yanchor: "top",
       showarrow: false, text: BAND_TITLE[name], font: { size: 12, color: BAND_BAR[name] },
     });
   }
@@ -633,15 +646,22 @@ export function buildCohortBands(spec: PlotSpec, opts: { yLog?: boolean } = {}):
   const centersObj: Record<string, number> = spec.cluster_centers ?? {};
   for (const [k, v] of Object.entries(centersObj)) {
     if (!v || v <= 0) continue;
+    const xv = isPeriod ? 1 / v : v;
     shapes.push({
-      type: "line", xref: "x", yref: "paper", x0: v, x1: v, y0: 0, y1: 0.86,
+      type: "line", xref: "x", yref: "paper", x0: xv, x1: xv, y0: 0, y1: 0.86,
       line: { color: "#555", width: 1, dash: "dot" },
     });
     annotations.push({
-      x: v, xref: "x", yref: "paper", y: 0.88, yanchor: "bottom",
+      x: xv, xref: "x", yref: "paper", y: 0.88, yanchor: "bottom",
       showarrow: false, text: `IMF${Number(k) + 1}`, font: { size: 9, color: "#555" },
     });
   }
+
+  const what = isPeriod ? "period" : "frequency";
+  const xTitle = isPeriod ? "period (s)" : "characteristic frequency (Hz)";
+  const hover = isPeriod
+    ? "T ≈ %{x:.2f} s<br>count %{y}<extra></extra>"
+    : "f ≈ %{x:.4f} Hz<br>count %{y}<extra></extra>";
 
   return {
     data: [
@@ -651,15 +671,15 @@ export function buildCohortBands(spec: PlotSpec, opts: { yLog?: boolean } = {}):
         y: counts,
         width: widths,
         marker: { color: barColors, line: { width: 0 } },
-        hovertemplate: "f ≈ %{x:.4f} cyc/sample<br>count %{y}<extra></extra>",
+        hovertemplate: hover,
       },
     ],
     layout: {
       title: {
-        text: `IMF frequency spectrum · ${spec.contrast ?? ""} ${spec.processing ?? ""} · ${spec.n_subjects ?? "?"} subjects`,
+        text: `IMF ${what} spectrum · ${spec.contrast ?? ""} ${spec.processing ?? ""} · ${spec.n_subjects ?? "?"} subjects · ${scheme} bands`,
       },
-      height: 460,
-      xaxis: { title: { text: "characteristic frequency (cycles / sample)" } },
+      height: 420,
+      xaxis: { title: { text: xTitle } },
       yaxis: countAxis(opts.yLog),
       shapes,
       annotations,
@@ -682,7 +702,7 @@ export function buildBandReconstruction(spec: PlotSpec): Figure {
   for (const b of order) {
     const idx = (spec.assignment?.[b] ?? []).map((a: any) => a.imf);
     const r = bands[b];
-    const range = r ? ` [${r[0].toFixed(3)}–${r[1].toFixed(3)}]` : "";
+    const range = r ? ` [${r[0].toFixed(3)}–${r[1].toFixed(3)} Hz]` : "";
     rows.push({
       name: `${BAND_TITLE[b]}${range} · ${idx.length} IMF${idx.length === 1 ? "" : "s"}`,
       y: spec.signals?.[b] ?? [],

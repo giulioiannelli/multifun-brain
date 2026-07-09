@@ -25,13 +25,26 @@ export interface CatalogResponse {
 }
 
 // Signal tab: raw ROI timecourses, keyed by (subject, contrast, processing).
+// `contrast` is "" for the older kw datasets (no co2/rest).
 export interface SignalEntry {
   subject: string;
   contrast: string;
   processing: string;
 }
 
+// One selectable raw dataset (a raw_data_<id> directory).
+export interface RawDataset {
+  id: string;
+  label: string;
+  n_subjects: number;
+  n_files: number;
+  has_contrast: boolean;
+}
+
 export interface SignalCatalog {
+  dataset: string;
+  datasets: RawDataset[];
+  has_contrast: boolean;
   entries: SignalEntry[];
   subjects: string[];
   contrasts: string[];

@@ -30,14 +30,28 @@ RESULTS_ROOT = _path_env(
 DATA_ROOT = _path_env("MFB_DATA_ROOT", REPO_ROOT / "data")
 
 # Raw ROI timecourses (AFNI ``.ts.1D``) for the Signal tab. One directory per
-# subject, discovered recursively.
-RAW_DATA_ROOT = _path_env("MFB_RAW_DATA_ROOT", REPO_ROOT / "data" / "raw_data")
+# subject, discovered recursively. Raw sets follow the ``raw_data_<atlas><batch>``
+# naming so they're identifiable at a glance; every ``raw_data_*`` dir under
+# DATA_ROOT is offered in the Signal-tab Dataset dropdown. This default is the
+# initially-selected set; the reader handles both the BIDS
+# (``sub-/ses-/task-/desc-``) and older ``kw…`` filename schemes.
+RAW_DATA_ROOT = _path_env(
+    "MFB_RAW_DATA_ROOT", REPO_ROOT / "data" / "raw_data_schaefer100_april2026"
+)
 
 # Schaefer atlas assets (region names + parcellation volume for 3-D).
 ATLAS_DIR = _path_env("MFB_ATLAS_DIR", REPO_ROOT / "data" / "schaefer_2018")
 ATLAS_ORDER_FILE = ATLAS_DIR / "Schaefer2018_100Parcels_7Networks_order.txt"
 ATLAS_NIFTI = (
     ATLAS_DIR / "Schaefer2018_100Parcels_7Networks_order_FSLMNI152_1mm.nii.gz"
+)
+
+# HarvardOxford cortical atlas labels (FSL XML) — channel names for the
+# 48-parcel raw set. Ships with the collaborator data under DATA_ROOT (which is
+# gitignored), so it may be absent on a fresh clone; callers fall back to
+# generic ``region-N`` labels when it is.
+HARVARD_OXFORD_XML = _path_env(
+    "MFB_HARVARD_OXFORD_XML", DATA_ROOT / "HarvardOxford-Cortical.xml"
 )
 
 # On-disk cache for computed plot specs / centroids.

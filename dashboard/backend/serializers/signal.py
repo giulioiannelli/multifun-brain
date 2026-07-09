@@ -58,21 +58,32 @@ def channel_spec(ts: np.ndarray, names: list[str], channel: int = 0, **_) -> dic
 
 
 def cohort_bands_spec(cohort: dict, **_) -> dict:
-    """Cohort IMF-frequency histogram + the data-driven s5/s4/s* band ranges.
+    """Cohort IMF-frequency histogram + the s5/s4/s* band ranges (the notebook figure).
 
-    Reconstructs Daniele's frequency histogram (in cycles/sample): pooled per-IMF
-    characteristic frequencies across all subjects/ROIs, with the band ranges and
-    per-IMF-index cluster centres for shading/annotation.
+    Reconstructs the collaborator's frequency *and* period histograms (in Hz /
+    seconds, ``fs = 1/TR``): pooled per-IMF characteristic frequencies (median
+    instantaneous frequency) across all subjects/ROIs, filtered to ``0 < f < 1``
+    Hz, with the band ranges and per-IMF-index cluster centres for
+    shading/annotation. ``scheme`` is ``canonical`` (fixed edges) or
+    ``data_driven``.
     """
+    import math
+
     freqs = np.asarray(cohort["all_freqs"], dtype=float)
-    freqs = freqs[np.isfinite(freqs) & (freqs > 0)]
-    scheme = cohort["scheme"]
+    freqs = freqs[np.isfinite(freqs) & (freqs > 0) & (freqs < 1.0)]  # notebook filter
+    scheme = cohort.get("scheme")
     if freqs.size < 2 or scheme is None:
         return {"kind": "cohort_bands", "error": "not enough IMF frequencies to build the histogram"}
 
     bands = {name: list(rng) for name, rng in scheme.bands.items()}
-    hi = max(float(np.percentile(freqs, 99.7)), bands["sstar"][1])
-    counts, edges = np.histogram(freqs, bins=64, range=(0.0, hi))
+    # Bins ~ the notebook's ceil(log2(n) + 30) rule.
+    nbins = max(8, math.ceil(math.log2(freqs.size) + 30))
+    hi = max(0.2, float(np.percentile(freqs, 99.7)), bands["sstar"][1])
+    counts, edges = np.histogram(freqs, bins=nbins, range=(0.0, hi))
+    # Period (s) histogram — the notebook's companion panel.
+    periods = 1.0 / freqs
+    p_hi = max(float(np.percentile(periods, 99.0)), 1.0 / bands["s5"][0])
+    p_counts, p_edges = np.histogram(periods, bins=nbins, range=(0.0, p_hi))
     centers = {int(k): float(v) for k, v in scheme.centers.items()}
     # IMFs per index that contributed (cluster sizes), for hover/context.
     cluster_n = {int(k): int(np.size(v)) for k, v in cohort["per_index"].items()}
@@ -81,10 +92,15 @@ def cohort_bands_spec(cohort: dict, **_) -> dict:
             "kind": "cohort_bands",
             "contrast": cohort["contrast"],
             "processing": cohort["processing"],
+            "scheme": cohort.get("scheme_name", "canonical"),
+            "units": "Hz",
+            "sample_rate": float(cohort.get("sample_rate", 1.0)),
             "n_subjects": int(cohort["n_subjects"]),
             "n_imf_total": int(freqs.size),
             "counts": counts,
             "edges": edges,
+            "period_counts": p_counts,
+            "period_edges": p_edges,
             "bands": bands,
             "drift_max": float(scheme.drift_max),
             "cluster_centers": centers,
@@ -113,6 +129,8 @@ def band_reconstruction_spec(recon: dict, names: list[str], **_) -> dict:
             "kind": "signal_bands",
             "channel": ch,
             "name": name,
+            "scheme": recon.get("scheme", "canonical"),
+            "units": "Hz",
             "t": list(range(n_t)),
             "signal": signal,
             "bands": bands,

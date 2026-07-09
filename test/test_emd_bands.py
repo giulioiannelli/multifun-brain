@@ -7,7 +7,9 @@ import pytest
 
 from multifunbrain.analysis.emd_bands import (
     BAND_ORDER,
+    CANONICAL_BANDS,
     assign_imfs,
+    canonical_scheme,
     estimate_band_edges,
     reconstruct_bands,
     sift_with_frequencies,
@@ -94,3 +96,40 @@ def test_assign_and_reconstruct_bands():
     # The summed band signals should not exceed the full reconstruction in energy.
     total = sum(signals[b] for b in BAND_ORDER)
     assert np.var(total) <= np.var(x) + 1e-6
+
+
+def test_canonical_scheme_matches_constants():
+    sch = canonical_scheme()
+    assert sch.bands == CANONICAL_BANDS
+    assert sch.drift_max == CANONICAL_BANDS["s5"][0]
+    # Contiguous edges: s5.hi == s4.lo and s4.hi == sstar.lo.
+    assert sch.bands["s5"][1] == sch.bands["s4"][0]
+    assert sch.bands["s4"][1] == sch.bands["sstar"][0]
+    # Optional per-IMF cluster centres are carried through for display.
+    sch2 = canonical_scheme({0: 0.15, 1: 0.05})
+    assert sch2.centers == {0: 0.15, 1: 0.05}
+    assert sch2.bands == CANONICAL_BANDS
+
+
+def test_assign_imfs_canonical_edges_match_notebook():
+    # Closed intervals, first-match low->high: an IMF on a shared edge falls in
+    # the lower band, reproducing the notebook's nested if/elif classification.
+    freqs = np.array([0.005, 0.015, 0.027, 0.05, 0.073, 0.12, 0.30])
+    a = assign_imfs(freqs, CANONICAL_BANDS)
+    assert a["s5"] == [1, 2]  # 0.015 and the shared edge 0.027 -> s5
+    assert a["s4"] == [3, 4]  # 0.05 and the shared edge 0.073 -> s4
+    assert a["sstar"] == [5]  # 0.12
+    # 0.005 (drift, < 0.010) and 0.30 (> 0.180) fall in no band.
+
+
+def test_sift_median_is_default_and_weighted_mean_available():
+    x = _three_tone()
+    _, f_default = sift_with_frequencies(x)  # method defaults to "median"
+    _, f_median = sift_with_frequencies(x, method="median")
+    np.testing.assert_array_equal(np.nan_to_num(f_default), np.nan_to_num(f_median))
+    _, f_weighted = sift_with_frequencies(x, method="weighted_mean")
+    # Both estimators land near the three injected tones.
+    for freqs in (f_median, f_weighted):
+        finite = freqs[np.isfinite(freqs)]
+        for tone in (0.20, 0.05, 0.0125):
+            assert np.min(np.abs(finite - tone)) < 0.02

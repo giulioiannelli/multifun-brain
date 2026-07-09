@@ -26,7 +26,8 @@ export const api = {
   plot: (kind: string, params: QueryParams) =>
     getJSON<PlotSpec>(`/plot/${kind}`, params),
   // Signal tab (raw timecourses) lives under its own /signal endpoint.
-  signalCatalog: () => getJSON<SignalCatalog>("/signal/catalog"),
+  signalCatalog: (dataset?: string) =>
+    getJSON<SignalCatalog>("/signal/catalog", dataset ? { dataset } : undefined),
   signal: (kind: string, params: QueryParams) =>
     getJSON<PlotSpec>(`/signal/${kind}`, params),
 };
