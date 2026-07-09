@@ -1,0 +1,526 @@
+:root {
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --border: #e0e0e0;
+  --text: #212121;
+  --muted: #757575;
+  --primary: #1976d2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: none;
+  margin: 0;
+  padding: 0 24px 48px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px 0 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--primary);
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.selector-bar,
+.subbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 0;
+}
+
+.subbar {
+  padding: 6px 0 14px;
+}
+
+.selector-bar label,
+.subbar label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--muted);
+  gap: 4px;
+}
+
+.selector-bar select,
+.subbar select {
+  font-size: 14px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  min-width: 180px;
+}
+
+.content {
+  margin-top: 4px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.tabs button {
+  border: none;
+  background: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tabs button.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+/* Segmented toggle (e.g. Linear / Log colour scale) */
+.seg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seg > span {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.seg button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.seg button.active {
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Plot grid */
+.plot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.plot-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.plot-card.wide {
+  grid-column: 1 / -1;
+}
+
+/* Square plot area (correlation / partial-correlation matrices): keeps cells
+   square AND the colourbar adjacent to the matrix instead of pinned far right. */
+.plot-square {
+  width: 100%;
+  max-width: 940px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+}
+
+.plot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.plot-head h3 {
+  margin: 0;
+}
+
+.plot-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plot-card h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.plot-caption {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* 3-D brain iframe (nilearn standalone page). nilearn renders a fixed-width
+   figure, so cap + centre the frame to avoid a wide empty margin. */
+.brain3d-frame {
+  display: block;
+  width: 100%;
+  max-width: 900px;
+  height: 640px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.hint {
+  color: var(--muted);
+  padding: 24px;
+}
+
+.plot-error {
+  color: #c62828;
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.raw-spec {
+  font-size: 11px;
+  max-height: 320px;
+  overflow: auto;
+  background: #f5f5f5;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+/* Tables */
+.metrics-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+
+.metrics-table th,
+.metrics-table td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.metrics-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.node-metrics-wrap {
+  max-height: 460px;
+  overflow: auto;
+}
+
+.metrics-table.node-metrics td {
+  text-align: right;
+}
+
+.metrics-table.node-metrics td.node-name {
+  text-align: left;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.metrics-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (max-width: 820px) {
+  .plot-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ───────────────────────── Pipeline tab (methodology scheme) ──────────────
+   A static boxes-and-arrows knowledge tree. Tone classes tint each stage by
+   role; the same classes colour the legend dots. */
+.pipe {
+  --t-signal: #0097a7;
+  --t-signal-bg: #e0f7fa;
+  --t-clean: #9e9e9e;
+  --t-clean-bg: #f5f5f5;
+  --t-network: #5e35b1;
+  --t-network-bg: #ede7f6;
+  --t-compare: #f57c00;
+  --t-compare-bg: #fff3e0;
+  --t-goal: #2e7d32;
+  --t-goal-bg: #e8f5e9;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.pipe-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+}
+
+.pipe-intro {
+  margin: 0;
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.pipe-seg {
+  flex-shrink: 0;
+}
+
+/* Legend */
+.pipe-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 0 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pipe-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pipe-legend .dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* Tone tints (background + left accent), applied to boxes and legend dots */
+.pipe .tone-signal { --tone: var(--t-signal); --tone-bg: var(--t-signal-bg); }
+.pipe .tone-clean { --tone: var(--t-clean); --tone-bg: var(--t-clean-bg); }
+.pipe .tone-network { --tone: var(--t-network); --tone-bg: var(--t-network-bg); }
+.pipe .tone-compare { --tone: var(--t-compare); --tone-bg: var(--t-compare-bg); }
+.pipe .tone-goal { --tone: var(--t-goal); --tone-bg: var(--t-goal-bg); }
+.pipe-legend .dot.tone-signal { background: var(--t-signal); }
+.pipe-legend .dot.tone-clean { background: var(--t-clean); }
+.pipe-legend .dot.tone-network { background: var(--t-network); }
+.pipe-legend .dot.tone-compare { background: var(--t-compare); }
+.pipe-legend .dot.tone-goal { background: var(--t-goal); }
+
+/* Stage box */
+.pipe-box {
+  position: relative;
+  width: 100%;
+  background: var(--tone-bg, var(--panel));
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--tone, var(--primary));
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.pipe-box:hover {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.pipe-box-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pipe-box-sub {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.pipe-chip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tone, var(--primary));
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--tone, var(--primary));
+  border-radius: 4px;
+  padding: 0 5px;
+  text-transform: uppercase;
+}
+
+.pipe-box.tone-goal {
+  border: 2px solid var(--t-goal);
+  box-shadow: 0 2px 14px rgba(46, 125, 50, 0.18);
+}
+
+/* Vertical connector */
+.pipe-down {
+  position: relative;
+  height: 36px;
+}
+
+.pipe-down svg {
+  display: block;
+  width: 20px;
+  height: 36px;
+  margin: 0 auto;
+}
+
+.pipe-down-label {
+  position: absolute;
+  left: calc(50% + 16px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* ── Current view: two owner lanes + a hand-off arrow between them ── */
+.pipe-lanes {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pipe-lane {
+  flex: 1 1 340px;
+  max-width: 400px;
+}
+
+.pipe-lane-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.pipe-lane-owner {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.pipe-lane-role {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.pipe-handoff {
+  flex: 0 0 80px;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.pipe-handoff svg {
+  width: 64px;
+  height: 24px;
+}
+
+.pipe-handoff span {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--muted);
+  max-width: 80px;
+  line-height: 1.3;
+}
+
+/* On narrow screens the lanes stack; turn the hand-off arrow downward. */
+@media (max-width: 820px) {
+  .pipe-handoff {
+    flex-basis: auto;
+  }
+  .pipe-handoff svg {
+    transform: rotate(90deg);
+  }
+  .pipe-handoff span {
+    max-width: none;
+  }
+}
+
+/* ── Proposed view: a centred single flow with fan-out rows ── */
+.pipe-proposed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pipe-proposed > .pipe-box {
+  max-width: 600px;
+}
+
+.pipe-row {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  max-width: 600px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.pipe-row .pipe-box {
+  flex: 1 1 0;
+  min-width: 140px;
+}
+
+.pipe-merge-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-align: center;
+}

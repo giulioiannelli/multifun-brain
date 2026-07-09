@@ -3,10 +3,11 @@ channels:
   - conda-forge
 dependencies:
   - python=3.12
+  - nodejs>=18        # build-time only: compiles the dashboard frontend (run.sh)
   - numpy
   - scipy
   - networkx
   - matplotlib
   - pip
   - pip:
-      - "-e .[dev,viz]"
+      - "-e .[dev,viz,dashboard]"
