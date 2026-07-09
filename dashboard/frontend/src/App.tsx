@@ -3,10 +3,13 @@ import { api } from "./api/client";
 import { SelectorBar } from "./components/SelectorBar";
 import { ExploreView, type ExploreTab } from "./views/ExploreView";
 import { SignalView } from "./views/SignalView";
+import { PipelineView } from "./views/PipelineView";
 import type { Dataset } from "./types";
 
-// Signal (raw timecourses) comes first; the rest explore a computed result.
-const TABS = ["Signal", "Correlation", "Network", "Brain 3-D", "LRG"] as const;
+// Pipeline (methodology overview) is the landing tab; Signal shows the raw
+// timecourses; the rest explore a computed result. The first two are data-free
+// (no result selector).
+const TABS = ["Pipeline", "Signal", "Correlation", "Network", "Brain 3-D", "LRG"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
@@ -14,7 +17,7 @@ export default function App() {
   const [datasetId, setDatasetId] = useState<string | null>(null);
   const [label, setLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("Signal");
+  const [tab, setTab] = useState<Tab>("Pipeline");
 
   useEffect(() => {
     api
@@ -43,7 +46,9 @@ export default function App() {
     return ds?.items.find((it) => it.label === label) ?? null;
   }, [datasets, datasetId, label]);
 
-  const isSignal = tab === "Signal";
+  // Data-free tabs need no result selector: Pipeline is a static methodology
+  // scheme; Signal owns its own dataset dropdown.
+  const dataFree = tab === "Pipeline" || tab === "Signal";
 
   return (
     <div className="app">
@@ -62,7 +67,7 @@ export default function App() {
 
       {error && <div className="plot-error">Failed to load catalog: {error}</div>}
 
-      {!isSignal && (
+      {!dataFree && (
         <SelectorBar
           datasets={datasets}
           datasetId={datasetId}
@@ -72,7 +77,9 @@ export default function App() {
       )}
 
       <main className="content">
-        {isSignal ? (
+        {tab === "Pipeline" ? (
+          <PipelineView />
+        ) : tab === "Signal" ? (
           <SignalView />
         ) : (
           <ExploreView
