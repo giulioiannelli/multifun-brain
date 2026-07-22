@@ -5,7 +5,7 @@ A processing *token* — the AFNI ``desc`` tag or the older ``kw`` modality tag
 independent facets:
 
 * the imaging **contrast** / modality: ``bold`` (oxygenation), ``vaso`` (blood
-  volume), ``cbf`` (ASL flow), or ``noise`` (the MIR-extracted noise component);
+  volume), or ``cbf`` (ASL flow);
 * the **processing** pipeline: ``clean`` / ``optcom`` / ``optcomMIRdenoised`` /
   ``bpf`` / ``raw`` / a reconstruction id (``furN`` / ``fcurN``) / a space
   (``MNI152``).
@@ -22,9 +22,11 @@ rule to :data:`_PROCESSING_RULES`.
 
 from __future__ import annotations
 
-# Modality substrings, highest priority first. ``MIRNoise_bold`` is the *noise*
-# component (not a bold image), so ``noise`` must be tested before ``bold``.
-_MODALITIES: tuple[str, ...] = ("noise", "cbf", "vaso", "bold")
+# Modality substrings = the acquisition contrast. MIR-derived BOLD series
+# (``optcomMIRDenoised_bold`` = the denoised signal, ``MIRNoise_bold`` = the noise
+# that MIR removed) are both **BOLD**; they differ by *processing*, not contrast,
+# so matching ``bold`` on the ``_bold`` suffix is exactly right.
+_MODALITIES: tuple[str, ...] = ("cbf", "vaso", "bold")
 
 # Ordered (first-match-wins) processing rules — ``(needle_lowercase, value)`` —
 # most specific first (``optcomMIRDenoised`` before ``optcom``; a ``clean_`` prefix
@@ -46,7 +48,6 @@ CONTRAST_LABELS: dict[str, str] = {
     "bold": "BOLD",
     "vaso": "VASO",
     "cbf": "CBF",
-    "noise": "noise",
 }
 
 _KNOWN_TASKS: frozenset[str] = frozenset({"co2", "rest"})
@@ -55,12 +56,12 @@ _KNOWN_TASKS: frozenset[str] = frozenset({"co2", "rest"})
 def detect_contrast(token: str) -> str | None:
     """Imaging contrast (modality) for a variant token, or ``None`` if unknown.
 
-    The ``noise`` modality is the MIR-extracted noise component (``MIRNoise``);
-    the substring ``de·noise·d`` in ``optcomMIRDenoised`` is the *opposite* (the
-    denoised signal), so it is masked out before scanning to avoid a false
-    ``noise`` match on the denoised BOLD variants.
+    ``Contrast`` is the acquisition modality (BOLD / VASO / CBF). The MIR-derived
+    BOLD series — ``optcomMIRDenoised_bold`` (denoised signal) and ``MIRNoise_bold``
+    (the removed noise) — are both **BOLD**, distinguished by their *processing*
+    (``optcomMIRdenoised`` vs ``MIRnoise``), not by contrast.
     """
-    low = token.lower().replace("denoised", "")
+    low = token.lower()
     for modality in _MODALITIES:
         if modality in low:
             return modality

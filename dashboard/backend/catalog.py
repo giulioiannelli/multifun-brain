@@ -22,7 +22,7 @@ def parse_label(label: str) -> dict:
     ``patient/<subject>/<variant>[/<band>]``, where ``<variant>`` is
     ``[<task>_]<token>``. The variant is decomposed into three axes via
     :func:`facets.parse_variant`: **task** (co2/rest — a genuine prefix only),
-    **contrast** (modality parsed from the token: bold/vaso/cbf/noise) and
+    **contrast** (modality parsed from the token: bold/vaso/cbf) and
     **processing** (the pipeline: clean/optcom/optcomMIRdenoised/bpf/raw/…). So a
     kw token like ``clean_kwCBF4D`` becomes task=None, contrast=cbf,
     processing=clean, while ``co2_bpfVASO`` becomes task=co2, contrast=vaso,

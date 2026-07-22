@@ -4,7 +4,7 @@ export interface ResultItem {
   label: string;
   level: string | null;
   task: string | null; // experimental task: co2 / rest (kw sets: null)
-  contrast: string | null; // imaging modality: bold / vaso / cbf / noise
+  contrast: string | null; // imaging modality: bold / vaso / cbf
   processing: string | null; // pipeline: clean / optcom / optcomMIRdenoised / bpf / raw / …
   band: string | null;
   subject: string | null;
@@ -26,7 +26,7 @@ export interface CatalogResponse {
 }
 
 // Signal tab: raw ROI timecourses. Three display facets — task (co2/rest),
-// contrast (modality: bold/vaso/cbf/noise), processing (clean/optcom/…) — plus
+// contrast (modality: bold/vaso/cbf), processing (clean/optcom/…) — plus
 // `token`, the original filename variant that the backend resolves files by.
 export interface SignalEntry {
   subject: string;

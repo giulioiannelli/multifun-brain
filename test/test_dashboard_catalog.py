@@ -20,7 +20,7 @@ from multifunbrain import PipelineConfig, PipelineResult
     [
         # April: task = co2/rest, contrast = modality, processing = pipeline.
         ("global/co2_MIRNoise_bold",
-         {"level": "global", "task": "co2", "contrast": "noise", "processing": "MIRnoise",
+         {"level": "global", "task": "co2", "contrast": "bold", "processing": "MIRnoise",
           "band": None, "subject": None}),
         ("global/rest_bpfBOLD",
          {"task": "rest", "contrast": "bold", "processing": "bpf", "band": None}),

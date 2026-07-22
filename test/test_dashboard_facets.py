@@ -21,7 +21,7 @@ from dashboard.backend import facets
         ("bpfVASO", "vaso", "bpf"),
         ("optcom_bold", "bold", "optcom"),
         ("optcomMIRDenoised_bold", "bold", "optcomMIRdenoised"),
-        ("MIRNoise_bold", "noise", "MIRnoise"),  # noise wins over the trailing "bold"
+        ("MIRNoise_bold", "bold", "MIRnoise"),  # MIR noise is a BOLD-derived series
         # kw tokens.
         ("kwCBF4D", "cbf", "raw"),
         ("clean_kwCBF4D", "cbf", "clean"),
@@ -41,15 +41,17 @@ def test_split_variant(token, contrast, processing):
 
 def test_parse_variant_peels_task():
     assert facets.parse_variant("co2_bpfBOLD") == ("co2", "bold", "bpf")
-    assert facets.parse_variant("rest_MIRNoise_bold") == ("rest", "noise", "MIRnoise")
+    assert facets.parse_variant("rest_MIRNoise_bold") == ("rest", "bold", "MIRnoise")
     # A "clean_" head is NOT a task; the token keeps its full name.
     assert facets.parse_variant("clean_kwCBF4D") == (None, "cbf", "clean")
     assert facets.parse_variant("kwfurN_Bold") == (None, "bold", "furN")
 
 
-def test_detect_contrast_priority():
-    # "noise" must beat "bold" for the MIR noise component.
-    assert facets.detect_contrast("MIRNoise_bold") == "noise"
+def test_detect_contrast():
+    # Contrast is the acquisition modality. Both MIR-derived BOLD series
+    # (denoised signal + removed noise) are BOLD — the processing distinguishes them.
+    assert facets.detect_contrast("MIRNoise_bold") == "bold"
+    assert facets.detect_contrast("optcomMIRDenoised_bold") == "bold"
     assert facets.detect_contrast("kwCBF4D") == "cbf"
     assert facets.detect_contrast("something_unknown") is None
 

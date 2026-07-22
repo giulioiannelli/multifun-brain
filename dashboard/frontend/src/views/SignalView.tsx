@@ -16,7 +16,7 @@ import type { QueryParams, SignalCatalog } from "../types";
 
 const TASK_LABEL: Record<string, string> = { co2: "CO₂", rest: "rest" };
 const CONTRAST_LABEL: Record<string, string> = {
-  bold: "BOLD", vaso: "VASO", cbf: "CBF", noise: "noise",
+  bold: "BOLD", vaso: "VASO", cbf: "CBF",
 };
 // Sentinel subject: the cross-subject mean timecourse (kept in sync with the
 // backend timeseries.AVG_SUBJECT). Carpet / channel / EMD / bands all honour it.
