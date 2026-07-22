@@ -54,6 +54,16 @@ chase down.
 - Windows: use the **"Anaconda Prompt"** (or "Miniconda Prompt") from the Start
   menu for every command below. macOS/Linux: any terminal.
 
+> **`conda env create` crawling?** conda's classic solver can be very slow. The
+> bundled `multifun-brain.yml` is already slimmed so conda only resolves Python +
+> Node (pip installs the rest from wheels), but if it's still slow, either enable
+> the fast **libmamba** solver (the default in conda ≥ 23.10):
+> ```bash
+> conda install -n base conda-libmamba-solver && conda config --set solver libmamba
+> ```
+> or create the env with **mamba** / **micromamba** instead — same file, much
+> faster: `mamba env create -f multifun-brain.yml`.
+
 <details>
 <summary>Prefer a plain <code>venv</code> instead of conda?</summary>
 

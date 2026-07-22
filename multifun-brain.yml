@@ -1,13 +1,21 @@
 name: multifun-brain
 channels:
   - conda-forge
+# Kept deliberately MINIMAL so the conda solver stays fast. Conda resolves only
+# Python + Node + pip here; pip then installs the scientific stack (numpy, scipy,
+# nilearn, …) from pre-built wheels via the package's own dependencies. Listing
+# numpy/scipy/etc. under conda forces a much larger, slower solve for no benefit
+# in this project.
+#
+# Still slow? conda's classic solver can crawl — use the fast libmamba solver
+# (the default since conda 23.10):
+#     conda install -n base conda-libmamba-solver
+#     conda config --set solver libmamba
+# …or just create the env with mamba / micromamba instead of conda:
+#     mamba env create -f multifun-brain.yml
 dependencies:
   - python=3.12
-  - nodejs>=18        # build-time only: compiles the dashboard frontend (run.sh)
-  - numpy
-  - scipy
-  - networkx
-  - matplotlib
+  - nodejs>=18        # build-time only: compiles the dashboard frontend
   - pip
   - pip:
-      - "-e .[dev,viz,dashboard]"
+      - "-e .[dev,viz,dashboard]"   # pulls numpy/scipy/networkx/nilearn/… as wheels
