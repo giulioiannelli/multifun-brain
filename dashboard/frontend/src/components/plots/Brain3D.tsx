@@ -10,14 +10,16 @@ export function Brain3D({
   filter,
   mode,
   edgeQuantile,
+  nodeSize = 9,
 }: {
   dataset: string;
   label: string;
   filter: string | null;
   mode: "connectome" | "markers";
   edgeQuantile: number;
+  nodeSize?: number;
 }) {
-  const params: QueryParams = { dataset, label, mode };
+  const params: QueryParams = { dataset, label, mode, node_size: nodeSize };
   if (filter) params.filter = filter;
   if (mode === "connectome") params.edge_quantile = edgeQuantile;
 

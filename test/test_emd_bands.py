@@ -9,6 +9,7 @@ from multifunbrain.analysis.emd_bands import (
     BAND_ORDER,
     CANONICAL_BANDS,
     assign_imfs,
+    band_correlation_matrices,
     canonical_scheme,
     estimate_band_edges,
     reconstruct_bands,
@@ -133,3 +134,32 @@ def test_sift_median_is_default_and_weighted_mean_available():
         finite = freqs[np.isfinite(freqs)]
         for tone in (0.20, 0.05, 0.0125):
             assert np.min(np.abs(finite - tone)) < 0.02
+
+
+def test_band_correlation_matrices_keys_and_shapes():
+    """{full, s5, s4, sstar} matrices, each (n_regions, n_regions)."""
+    rng = np.random.default_rng(3)
+    n_regions = 6
+    t = np.arange(1500)
+    # Shared slow tones so band correlations are well defined at sample_rate=1
+    # (0.02 -> s5 [0.010,0.027], 0.05 -> s4 [0.027,0.073]) + per-ROI noise.
+    shared = np.sin(2 * np.pi * 0.02 * t) + np.sin(2 * np.pi * 0.05 * t)
+    ts = np.stack(
+        [shared * (1 + 0.1 * i) + 0.05 * rng.standard_normal(t.size) for i in range(n_regions)]
+    )
+    out = band_correlation_matrices(ts, sample_rate=1.0)
+
+    assert set(out) == {"full", *BAND_ORDER}
+    for name, mat in out.items():
+        assert mat.shape == (n_regions, n_regions), name
+
+    full = out["full"]
+    assert np.allclose(full, full.T, equal_nan=True)
+    assert np.allclose(np.diag(full), 1.0, atol=1e-6)
+    # At least one band must yield a finite (non-degenerate) correlation matrix.
+    assert any(np.isfinite(out[b]).any() for b in BAND_ORDER)
+
+
+def test_band_correlation_matrices_requires_2d():
+    with pytest.raises(ValueError, match="2-D"):
+        band_correlation_matrices(np.zeros(10), sample_rate=1.0)

@@ -11,3 +11,8 @@ declare module "react-plotly.js/factory" {
   const createPlotlyComponent: (plotly: unknown) => ComponentType<any>;
   export default createPlotlyComponent;
 }
+declare module "react-cytoscapejs" {
+  import type { ComponentType } from "react";
+  const CytoscapeComponent: ComponentType<any>;
+  export default CytoscapeComponent;
+}

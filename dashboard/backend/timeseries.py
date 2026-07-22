@@ -24,15 +24,21 @@ from pathlib import Path
 
 import numpy as np
 
-from multifunbrain.io import discover_timecourses, load_timecourses, sampling_rate
+from multifunbrain.io import discover_timecourses, load_timecourses, sampling_rate_for
 
 from . import config
 from .atlas import harvard_oxford_names, load_atlas
+from .facets import detect_contrast, split_variant
 
 # Display order mirrors the correlation-side selector (SelectorBar PROC_ORDER).
 _PROC_ORDER = [
-    "bpfBOLD", "bpfVASO", "MIRNoise_bold", "optcom_bold", "optcomMIRDenoised_bold",
+    "raw", "bpf", "optcom", "optcomMIRdenoised", "clean",
+    "furN", "fcurN", "MNI152", "MIRnoise",
 ]
+
+# Sentinel subject: the cross-subject mean timecourse (carpet / channel / EMD /
+# bands all operate on it). Kept in sync with the frontend SignalView constant.
+AVG_SUBJECT = "__avg__"
 
 
 def _order_by(values, order):
@@ -84,14 +90,18 @@ def raw_datasets() -> list[dict]:
         if not files:
             continue
         subjects = {f.subject for f in files}
-        contrasts = {f.contrast for f in files if f.contrast}
+        # A dataset "has a contrast" if its tokens carry an imaging modality
+        # (bold/vaso/cbf/noise) — true for the kw sets too, so the Dataset
+        # dropdown no longer tags them "· no contrast".
+        modalities = {detect_contrast(f.processing) for f in files}
+        modalities.discard(None)
         out.append(
             {
                 "id": _dataset_id(d),
                 "label": _dataset_id(d),
                 "n_subjects": len(subjects),
                 "n_files": len(files),
-                "has_contrast": bool(contrasts),
+                "has_contrast": bool(modalities),
             }
         )
     out.sort(key=lambda e: (e["id"] != default_id, e["id"]))  # default first
@@ -175,23 +185,42 @@ def region_names(dataset: str | None = None) -> list[str]:
 
 
 def signal_catalog(dataset: str | None = None) -> dict:
-    """Available raw timecourses + facets for the chosen dataset (+ dataset list)."""
+    """Available raw timecourses + facets for the chosen dataset (+ dataset list).
+
+    Each entry carries the three display facets — ``task`` (co2/rest, from the
+    filename), ``contrast`` (modality) and ``processing`` (pipeline), both parsed
+    from the variant token — plus the original ``token`` the backend resolves
+    files by (so file loading is unchanged; the frontend maps a facet selection
+    back to its token). ``has_task`` / ``has_contrast`` drive which dropdowns show.
+    """
     root = _root_for(dataset)
     index = _index(str(root), _mtime(root))
-    entries = [
-        {"subject": s, "contrast": c, "processing": p} for (s, c, p) in index
-    ]
-    entries.sort(key=lambda e: (e["subject"], e["contrast"], e["processing"]))
+    entries = []
+    for (s, task_raw, token) in index:  # task_raw = co2/rest/"", token = original desc/kw tag
+        contrast, proc = split_variant(token)
+        entries.append(
+            {
+                "subject": s,
+                "task": task_raw or None,
+                "contrast": contrast,
+                "processing": proc,
+                "token": token,
+            }
+        )
+    entries.sort(key=lambda e: (e["subject"], e["task"] or "", e["contrast"] or "", e["processing"]))
     subjects = sorted({e["subject"] for e in entries})
+    tasks = sorted({e["task"] for e in entries if e["task"]})
     contrasts = sorted({e["contrast"] for e in entries if e["contrast"]})
     processings = _order_by({e["processing"] for e in entries}, _PROC_ORDER)
     names = region_names(dataset)
     return {
         "dataset": _dataset_id(root),
         "datasets": raw_datasets(),
+        "has_task": bool(tasks),
         "has_contrast": bool(contrasts),
         "entries": entries,
         "subjects": subjects,
+        "tasks": tasks,
         "contrasts": contrasts,
         "processings": processings,
         "region_names": names,
@@ -203,28 +232,35 @@ def signal_catalog(dataset: str | None = None) -> dict:
 def get_timecourses(
     dataset: str | None, subject: str, contrast: str, processing: str
 ) -> np.ndarray | None:
-    """Region-major ``(n_regions, n_timepoints)`` array, or ``None`` if unknown."""
-    path = _resolve(_root_for(dataset), subject, contrast, processing)
+    """Region-major ``(n_regions, n_timepoints)`` array, or ``None`` if unknown.
+
+    ``subject = AVG_SUBJECT`` returns the cross-subject mean timecourse.
+    """
+    root = _root_for(dataset)
+    if subject == AVG_SUBJECT:
+        return _avg_array_cached(str(root), contrast or "", processing, _mtime(root))
+    path = _resolve(root, subject, contrast, processing)
     if path is None:
         return None
     return _safe_load(path)
 
 
-@lru_cache(maxsize=128)
-def _sift_cached(path: str, _mtime: float, channel: int, sample_rate: float) -> dict:
-    """Full EMD sift of one channel (all IMFs) + per-IMF characteristic freqs.
+def _sift_signal(ts: np.ndarray, channel: int, sample_rate: float) -> dict:
+    """Full EMD sift of one channel of *ts* (all IMFs) + per-IMF characteristic freqs.
 
-    Cached because sift is the expensive step; shared by the EMD panel and the
-    per-band reconstruction. ``imfs`` is ``(n_timepoints, n_imf)``; ``freqs`` is
-    the median instantaneous frequency per IMF (Hz when ``sample_rate = 1/TR``;
-    cycles/sample when ``sample_rate=1`` — unknown variants, e.g. the kw sets).
+    ``channel < 0`` sifts the mean-over-regions signal. ``imfs`` is
+    ``(n_timepoints, n_imf)``; ``freqs`` is the median instantaneous frequency per
+    IMF (Hz when ``sample_rate = 1/TR``; cycles/sample when ``sample_rate=1``).
     """
     from multifunbrain.analysis.emd_bands import sift_with_frequencies
 
-    ts = _load_cached(path, _mtime)
     n_regions, _ = ts.shape
-    channel = int(np.clip(channel, 0, n_regions - 1))
-    x = np.asarray(ts[channel], dtype=float)
+    if channel < 0:  # sentinel: the mean timecourse over all regions
+        channel = -1
+        x = np.asarray(ts.mean(axis=0), dtype=float)
+    else:
+        channel = int(np.clip(channel, 0, n_regions - 1))
+        x = np.asarray(ts[channel], dtype=float)
     imfs, freqs = sift_with_frequencies(x, sample_rate)  # (T, n_imf), (n_imf,)
     return {
         "channel": channel,
@@ -233,6 +269,74 @@ def _sift_cached(path: str, _mtime: float, channel: int, sample_rate: float) -> 
         "freqs": freqs,
         "signal": x,
     }
+
+
+@lru_cache(maxsize=128)
+def _sift_cached(path: str, _mtime: float, channel: int, sample_rate: float) -> dict:
+    """Cached single-subject sift (sift is the expensive step; shared by the EMD
+    panel and per-band reconstruction)."""
+    return _sift_signal(_load_cached(path, _mtime), channel, sample_rate)
+
+
+@lru_cache(maxsize=64)
+def _avg_array_cached(
+    root_str: str, contrast: str, processing: str, _mtime: float
+) -> np.ndarray | None:
+    """Cross-subject mean ``(n_regions, n_timepoints)`` array for a variant.
+
+    Averages every subject's timecourse for ``(contrast, processing)``
+    element-wise, truncated to the shortest run so mismatched lengths don't error.
+    ``None`` if no subject has this variant.
+    """
+    files = discover_timecourses(
+        Path(root_str),
+        contrasts=[contrast] if contrast else None,
+        processings=[processing],
+    )
+    arrs: list[np.ndarray] = []
+    for fobj in files:
+        arr = _safe_load(str(fobj.path))
+        if arr is not None:
+            arrs.append(arr)
+    if not arrs:
+        return None
+    min_r = min(a.shape[0] for a in arrs)
+    min_t = min(a.shape[1] for a in arrs)
+    return np.stack([a[:min_r, :min_t] for a in arrs], axis=0).mean(axis=0)
+
+
+@lru_cache(maxsize=64)
+def _sift_avg_cached(
+    root_str: str, contrast: str, processing: str, _mtime: float, channel: int, sample_rate: float
+) -> dict | None:
+    """Cached sift of the cross-subject average signal."""
+    ts = _avg_array_cached(root_str, contrast, processing, _mtime)
+    if ts is None:
+        return None
+    return _sift_signal(ts, channel, sample_rate)
+
+
+def _full_sift(root: Path, subject: str, contrast: str, processing: str, channel: int):
+    """``(full_sift, fs)`` for one subject or the cross-subject average, or ``None``."""
+    if subject == AVG_SUBJECT:
+        ts = _avg_array_cached(str(root), contrast or "", processing, _mtime(root))
+        if ts is None:
+            return None
+        fs = sampling_rate_for(root, ts.shape[1], processing)
+        full = _sift_avg_cached(str(root), contrast or "", processing, _mtime(root), int(channel), fs)
+    else:
+        path = _resolve(root, subject, contrast, processing)
+        if path is None:
+            return None
+        ts = _safe_load(path)
+        if ts is None:
+            return None
+        fs = sampling_rate_for(root, ts.shape[1], processing)  # ts is (n_regions, n_timepoints)
+        try:
+            full = _sift_cached(path, Path(path).stat().st_mtime, int(channel), fs)
+        except (OSError, ValueError):
+            return None
+    return (full, fs) if full is not None else None
 
 
 def sift_channel(
@@ -246,16 +350,13 @@ def sift_channel(
     """EMD IMF decomposition of one channel for display, or ``None`` if unknown.
 
     Caps to ``max_imfs`` IMFs (the residual carries the rest) and returns IMFs as
-    rows for the stacked figure.
+    rows for the stacked figure. ``subject = AVG_SUBJECT`` sifts the cross-subject
+    mean signal.
     """
-    path = _resolve(_root_for(dataset), subject, contrast, processing)
-    if path is None:
+    res = _full_sift(_root_for(dataset), subject, contrast, processing, int(channel))
+    if res is None:
         return None
-    fs = sampling_rate(processing)
-    try:
-        full = _sift_cached(path, Path(path).stat().st_mtime, int(channel), fs)
-    except (OSError, ValueError):
-        return None
+    full, _fs = res
     imfs = full["imfs"]  # (T, n_imf)
     x = full["signal"]
     if max_imfs and imfs.shape[1] > max_imfs:
@@ -284,13 +385,14 @@ def _cohort_pool_cached(
     files = discover_timecourses(
         Path(root_str), contrasts=[contrast], processings=[processing]
     )
-    fs = sampling_rate(processing)
+    fs = sampling_rate_for(root_str, None, processing)  # representative; refined per file below
     per_index: dict[int, list[float]] = {}
     all_freqs: list[float] = []
     for fobj in files:
         ts = _safe_load(str(fobj.path))
         if ts is None:
             continue
+        fs = sampling_rate_for(root_str, ts.shape[1], processing)  # real TR by N
         for roi in ts:
             _, freqs = sift_with_frequencies(roi, fs)  # Hz, median IF
             for k, fr in enumerate(freqs):
@@ -364,9 +466,6 @@ def band_reconstruction(
     pool; ``data_driven`` derives the edges from the cohort first.
     """
     root = _root_for(dataset)
-    path = _resolve(root, subject, contrast, processing)
-    if path is None:
-        return None
     from multifunbrain.analysis.emd_bands import canonical_scheme, reconstruct_bands
 
     if scheme == "data_driven":
@@ -377,11 +476,10 @@ def band_reconstruction(
     else:
         band_scheme = canonical_scheme()
 
-    fs = sampling_rate(processing)
-    try:
-        full = _sift_cached(path, Path(path).stat().st_mtime, int(channel), fs)
-    except (OSError, ValueError):
+    res = _full_sift(root, subject, contrast, processing, int(channel))
+    if res is None:
         return None
+    full, fs = res
     bands = band_scheme.bands
     signals, assignment = reconstruct_bands(full["imfs"], full["freqs"], bands)
     return {
