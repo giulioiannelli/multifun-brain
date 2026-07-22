@@ -4,12 +4,14 @@ import { SelectorBar } from "./components/SelectorBar";
 import { ExploreView, type ExploreTab } from "./views/ExploreView";
 import { SignalView } from "./views/SignalView";
 import { PipelineView } from "./views/PipelineView";
+import { CompareView } from "./views/CompareView";
 import type { Dataset } from "./types";
 
 // Pipeline (methodology overview) is the landing tab; Signal shows the raw
-// timecourses; the rest explore a computed result. The first two are data-free
-// (no result selector).
-const TABS = ["Pipeline", "Signal", "Correlation", "Network", "Brain 3-D", "LRG"] as const;
+// timecourses; the middle tabs explore one computed result; Compare contrasts
+// two. Pipeline / Signal / Compare own their own selectors (data-free of the
+// shared result selector).
+const TABS = ["Pipeline", "Signal", "Correlation", "Network", "Brain 3-D", "LRG", "Compare"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function App() {
@@ -46,9 +48,9 @@ export default function App() {
     return ds?.items.find((it) => it.label === label) ?? null;
   }, [datasets, datasetId, label]);
 
-  // Data-free tabs need no result selector: Pipeline is a static methodology
-  // scheme; Signal owns its own dataset dropdown.
-  const dataFree = tab === "Pipeline" || tab === "Signal";
+  // Data-free tabs need no shared result selector: Pipeline is a static
+  // methodology scheme; Signal owns its own dataset dropdown; Compare owns two.
+  const dataFree = tab === "Pipeline" || tab === "Signal" || tab === "Compare";
 
   return (
     <div className="app">
@@ -81,6 +83,8 @@ export default function App() {
           <PipelineView />
         ) : tab === "Signal" ? (
           <SignalView />
+        ) : tab === "Compare" ? (
+          <CompareView datasets={datasets} />
         ) : (
           <ExploreView
             tab={tab as ExploreTab}

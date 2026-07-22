@@ -404,6 +404,47 @@ export function colorDendrogram(spec: PlotSpec, h: number): { colors: string[]; 
   return { colors, nClusters: colorOfRoot.size };
 }
 
+// Per-leaf community colour at a cut height h — the node-level companion to
+// colorDendrogram (same union-find + leftmost-leaf ordering), so the clustered
+// network and glass brain colour nodes identically to the dendrogram branches.
+// Returns one hex colour per leaf index 0..n-1 (aligned to lrg_network node ids).
+export function clusterLeaves(spec: PlotSpec, h: number): { colors: string[]; nClusters: number } {
+  const n: number = spec.n_leaves ?? 0;
+  const Z: number[][] = spec.linkage ?? [];
+  const leaves: number[] = spec.leaves ?? [];
+  if (!n || !Z.length) return { colors: Array.from({ length: n }, () => CUT_GREY), nClusters: 0 };
+
+  const parent = new Int32Array(2 * n - 1);
+  for (let i = 0; i < parent.length; i++) parent[i] = i;
+  const find = (x: number): number => {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    return x;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
+  };
+  for (let i = 0; i < Z.length; i++) {
+    if (Z[i][2] <= h) { union(Z[i][0], Z[i][1]); union(n + i, Z[i][0]); }
+  }
+  const leafPos = new Map<number, number>();
+  leaves.forEach((lid, p) => leafPos.set(lid, p));
+  const rootMinPos = new Map<number, number>();
+  for (let leaf = 0; leaf < n; leaf++) {
+    const r = find(leaf);
+    const p = leafPos.get(leaf) ?? leaf;
+    if (!rootMinPos.has(r) || p < (rootMinPos.get(r) as number)) rootMinPos.set(r, p);
+  }
+  const colorOfRoot = new Map<number, number>();
+  [...rootMinPos.entries()].sort((a, b) => a[1] - b[1]).forEach(([r], idx) => colorOfRoot.set(r, idx));
+
+  const colors = Array.from({ length: n }, (_, leaf) => {
+    const ci = colorOfRoot.get(find(leaf));
+    return ci === undefined ? CUT_GREY : LRG_PALETTE[ci % LRG_PALETTE.length];
+  });
+  return { colors, nClusters: colorOfRoot.size };
+}
+
 // LRG dendrogram from a SciPy layout (icoord/dcoord) — log distance axis, zeros
 // floored. Branches are coloured client-side by the cut at height `cutHeight`
 // (defaults to the LRG's natural flat_threshold); a dotted line marks the cut and
@@ -887,6 +928,85 @@ export function buildBandReconstruction(spec: PlotSpec): Figure {
   });
   layout.xaxis = { title: { text: "timepoint" }, anchor: bottomAxis };
   return { data, layout };
+}
+
+// Compare tab: observed vs null per-ROI cophenetic-shift distribution. Overlays
+// the pooled strength-preserving null (grey) and the observed shifts (red) as
+// density histograms with median lines — the "is the reorganisation beyond
+// chance?" panel from the collaborator's fig6.
+export function buildCompareHist(spec: PlotSpec): Figure {
+  const observed: number[] = spec.observed ?? [];
+  const pooledNull: number[] = spec.pooled_null ?? [];
+  const all = pooledNull.length ? observed.concat(pooledNull) : observed;
+  const lo = all.length ? Math.min(...all) : 0;
+  const hi = all.length ? Math.max(...all) : 1;
+  const median = (a: number[]) => {
+    if (!a.length) return null;
+    const s = [...a].sort((x, y) => x - y);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const data: any[] = [];
+  const shapes: any[] = [];
+  if (pooledNull.length) {
+    data.push({
+      type: "histogram", x: pooledNull, histnorm: "probability density",
+      marker: { color: "#90A4AE" }, opacity: 0.6, name: `null (n=${pooledNull.length})`,
+      xbins: { start: lo, end: hi, size: (hi - lo) / 26 || 0.01 },
+    });
+    const mn = median(pooledNull);
+    if (mn != null) shapes.push({ type: "line", x0: mn, x1: mn, yref: "paper", y0: 0, y1: 1, line: { color: "#37474F", width: 1.2, dash: "dash" } });
+  }
+  data.push({
+    type: "histogram", x: observed, histnorm: "probability density",
+    marker: { color: "#B71C1C" }, opacity: 0.75, name: `observed (n=${observed.length})`,
+    xbins: { start: lo, end: hi, size: (hi - lo) / 26 || 0.01 },
+  });
+  const mo = median(observed);
+  if (mo != null) shapes.push({ type: "line", x0: mo, x1: mo, yref: "paper", y0: 0, y1: 1, line: { color: "#B71C1C", width: 1.5, dash: "dash" } });
+  return {
+    data,
+    layout: {
+      title: { text: "observed vs null shift distribution" },
+      height: 340, barmode: "overlay",
+      xaxis: { title: { text: "per-ROI cophenetic shift" } },
+      yaxis: { title: { text: "density" } },
+      legend: { font: { size: 10 }, x: 0.98, xanchor: "right", y: 0.98 },
+      shapes, margin: { l: 56, r: 16, t: 44, b: 44 },
+    },
+  };
+}
+
+// Compare tab: top-N reorganised (red, >0) + top-N stable (blue, <0) ROIs, as a
+// horizontal bar chart of the per-ROI metric (calibrated shift when a null is on,
+// else raw shift).
+export function buildCompareBars(spec: PlotSpec, n = 10): Figure {
+  const rois: any[] = spec.rois ?? [];
+  const top = rois.slice(0, n);
+  const bottom = rois.slice(-n).filter((r) => !top.includes(r));
+  const calibrated = spec.metric === "calibrated";
+  // Draw bottom (most stable) first so the most-reorganised sits at the top.
+  const ordered = [...bottom].reverse().concat([...top].reverse());
+  const names = ordered.map((r) => r.name);
+  const vals = ordered.map((r) => r.value);
+  const colors = ordered.map((r) => (r.value >= 0 ? "#B71C1C" : "#1565C0"));
+  return {
+    data: [{
+      type: "bar", orientation: "h", x: vals, y: names,
+      marker: { color: colors, line: { color: "white", width: 0.6 } },
+      hovertemplate: "%{y}<br>%{x:.3f}<extra></extra>",
+    }],
+    layout: {
+      title: { text: `top ${top.length} reorganised (red) + top ${bottom.length} stable (blue)` },
+      height: Math.max(360, ordered.length * 22 + 80),
+      xaxis: {
+        title: { text: calibrated ? "calibrated shift (obs − null median)" : "cophenetic-rank shift" },
+        zeroline: true, zerolinecolor: "#90A4AE",
+      },
+      yaxis: { automargin: true, tickfont: { size: 9 } },
+      margin: { l: 10, r: 16, t: 44, b: 44 },
+    },
+  };
 }
 
 // Community-flow Sankey across consecutive τ. Nodes sit in τ columns (node_x) and

@@ -22,6 +22,10 @@ import networkx as nx
 import nibabel as nib
 import numpy as np
 
+# ``linkage_at_tau_min`` now lives in the library (single canonical home); kept
+# importable here so 08/09/_handoff_compare keep their ``from _fig_common import``.
+from multifunbrain.analysis.lrg.partitions import linkage_at_tau_min  # noqa: F401
+
 ROOT = Path("/home/opisthofulax/Documents/research+/brain_network/multifun-brain")
 SRC_BASE = ROOT / "data/correlation_mat_april_data"
 TS_BASE = SRC_BASE / "20260326_raw-data_Maria"
@@ -81,40 +85,6 @@ def chain_pipeline(
         corr_pos, method="lans", alpha=alpha, weights="positive"
     )
     return corr_prep, corr_mp, corr_pos, G_lans
-
-
-def linkage_at_tau_min(G_lans: nx.Graph) -> tuple[np.ndarray, np.ndarray, float]:
-    """Build the LRG diffusion-distance linkage at τ_min = 1 / λ_max.
-
-    Returns
-    -------
-    Z : np.ndarray
-        scipy linkage matrix.
-    leaf_atlas_idx : np.ndarray of int
-        Atlas index of each leaf, in the linkage's leaf order.
-    tau : float
-        ``1 / λ_max`` (largest non-zero Laplacian eigenvalue).
-    """
-    from multifunbrain.analysis.lrg.distance import symmetrized_inverse_distance
-    from multifunbrain.analysis.lrg.kernel import (
-        graph_laplacian_and_spectrum,
-        rho_matrix,
-    )
-    from multifunbrain.analysis.lrg.partitions import compute_normalized_linkage
-
-    node_list = list(G_lans.nodes())
-    L, evals = graph_laplacian_and_spectrum(
-        G_lans, weight="weight", normalized=True
-    )
-    nonzero = evals[np.abs(evals) > 1e-9]
-    if nonzero.size == 0:
-        raise RuntimeError("Laplacian has no non-zero eigenvalues")
-    tau = 1.0 / float(nonzero.max())
-    dists_cond = symmetrized_inverse_distance(tau, lambda t: rho_matrix(t, L))
-    Z, _labels, _tmax = compute_normalized_linkage(
-        dists_cond, G_lans, labelList="numbers"
-    )
-    return Z, np.asarray(node_list, dtype=int), tau
 
 
 _ATLAS_CACHE: dict[str, Any] = {}

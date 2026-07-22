@@ -69,6 +69,8 @@ export function ExploreView({
   const [netSizeBy, setNetSizeBy] = useState<string>("strength");
   const [netNodeScale, setNetNodeScale] = useState<number>(1);
   const [netEdgeScale, setNetEdgeScale] = useState<number>(1);
+  const [netEdgeColorBy, setNetEdgeColorBy] = useState<string>("weight");
+  const [netEdgeScaleMode, setNetEdgeScaleMode] = useState<string>("sqrt");
 
   const filters = item?.filters ?? [];
   useEffect(() => {
@@ -118,6 +120,8 @@ export function ExploreView({
     sizeBy: netSizeBy,
     nodeScale: netNodeScale,
     edgeScale: netEdgeScale,
+    edgeColorBy: netEdgeColorBy,
+    edgeScaleMode: netEdgeScaleMode,
   };
 
   return (
@@ -132,6 +136,39 @@ export function ExploreView({
               ))}
             </select>
           </label>
+          {/* Shared sparsification — drives Network, LRG and Brain-3D alike. */}
+          <label>
+            Sparsify
+            <select value={sparsify} onChange={(e) => setSparsify(e.target.value)}>
+              <option value="filter">As computed (filter)</option>
+              <option value="percolation">Percolation backbone</option>
+              <option value="disparity">Disparity filter</option>
+              <option value="lans">LANS backbone</option>
+              <option value="mp_validated">MP-validated</option>
+              <option value="threshold">|r| ≥ threshold</option>
+            </select>
+          </label>
+          {(sparsify === "disparity" || sparsify === "lans") && (
+            <label>
+              α
+              <select value={sparsifyAlpha} onChange={(e) => setSparsifyAlpha(Number(e.target.value))}>
+                <option value={0.01}>0.01</option>
+                <option value={0.05}>0.05</option>
+                <option value={0.1}>0.10</option>
+                <option value={0.2}>0.20</option>
+              </select>
+            </label>
+          )}
+          {sparsify === "threshold" && (
+            <label>
+              |r| ≥
+              <select value={sparsifyThreshold} onChange={(e) => setSparsifyThreshold(Number(e.target.value))}>
+                {[0.1, 0.2, 0.3, 0.4, 0.5, 0.6].map((v) => (
+                  <option key={v} value={v}>{v.toFixed(1)}</option>
+                ))}
+              </select>
+            </label>
+          )}
           {tab === "Brain 3-D" && (
             <>
               <div className="seg">
@@ -260,36 +297,6 @@ export function ExploreView({
         <>
           <div className="subbar">
             <label>
-              Sparsify
-              <select value={sparsify} onChange={(e) => setSparsify(e.target.value)}>
-                <option value="filter">As computed (filter)</option>
-                <option value="percolation">Percolation backbone</option>
-                <option value="disparity">Disparity filter</option>
-                <option value="threshold">|r| ≥ threshold</option>
-              </select>
-            </label>
-            {sparsify === "disparity" && (
-              <label>
-                α
-                <select value={sparsifyAlpha} onChange={(e) => setSparsifyAlpha(Number(e.target.value))}>
-                  <option value={0.01}>0.01</option>
-                  <option value={0.05}>0.05</option>
-                  <option value={0.1}>0.10</option>
-                  <option value={0.2}>0.20</option>
-                </select>
-              </label>
-            )}
-            {sparsify === "threshold" && (
-              <label>
-                |r| ≥
-                <select value={sparsifyThreshold} onChange={(e) => setSparsifyThreshold(Number(e.target.value))}>
-                  {[0.1, 0.2, 0.3, 0.4, 0.5, 0.6].map((v) => (
-                    <option key={v} value={v}>{v.toFixed(1)}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label>
               Edges
               <select value={netEdgeQ} onChange={(e) => setNetEdgeQ(Number(e.target.value))}>
                 <option value={0}>all</option>
@@ -347,6 +354,22 @@ export function ExploreView({
                 <option value={3}>3.0</option>
               </select>
             </label>
+            <label>
+              Edge colour
+              <select value={netEdgeColorBy} onChange={(e) => setNetEdgeColorBy(e.target.value)}>
+                <option value="weight">By weight</option>
+                <option value="uniform">Uniform</option>
+              </select>
+            </label>
+            <label>
+              Edge width law
+              <select value={netEdgeScaleMode} onChange={(e) => setNetEdgeScaleMode(e.target.value)}>
+                <option value="linear">Linear</option>
+                <option value="sqrt">Sqrt</option>
+                <option value="log">Log</option>
+                <option value="rank">Rank (percentile)</option>
+              </select>
+            </label>
           </div>
           <div className="plot-grid">
             <PlotPanel kind="global_metrics" title="Global metrics" params={fparams} />
@@ -385,12 +408,24 @@ export function ExploreView({
               mode={brainMode}
               edgeQuantile={edgeQuantile}
               nodeSize={brainNodeSize}
+              sparsify={sparsify}
+              sparsifyAlpha={sparsifyAlpha}
+              sparsifyThreshold={sparsifyThreshold}
             />
           </section>
         </div>
       )}
 
-      {tab === "LRG" && <LrgView dataset={datasetId} label={label} filter={filter} />}
+      {tab === "LRG" && (
+        <LrgView
+          dataset={datasetId}
+          label={label}
+          filter={filter}
+          sparsify={sparsify}
+          sparsifyAlpha={sparsifyAlpha}
+          sparsifyThreshold={sparsifyThreshold}
+        />
+      )}
     </div>
   );
 }

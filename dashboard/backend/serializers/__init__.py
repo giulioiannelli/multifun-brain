@@ -35,4 +35,5 @@ PLOT_KINDS: dict[str, Callable] = {
     "psi": lrg.psi_spec,
     "partition_flow": lrg.partition_flow_spec,
     "sankey": lrg.sankey_spec,
+    "lrg_network": lrg.lrg_network_spec,
 }

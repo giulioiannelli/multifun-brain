@@ -12,6 +12,7 @@ import networkx as nx
 import numpy as np
 
 from ..encode import clean
+from ..graphs import derive_graph, result_gamma
 from ..remap import surviving_labels
 
 
@@ -82,46 +83,6 @@ def node_metrics_spec(result, *, filter_name: str | None = None, **_) -> dict:
     )
 
 
-def _derive_graph(
-    result, fname: str, sparsify: str | None, alpha: float, threshold: float
-) -> tuple[nx.Graph, str]:
-    """Return the graph to display + the effective sparsification label.
-
-    ``sparsify`` selects a backbone re-derived from the signed correlation
-    (``corr_prepared``) with the pipeline's own methods so dense hairballs can be
-    thinned to a legible skeleton; ``None``/``"filter"`` keeps the pre-computed
-    filtered network unchanged. Falls back to the filtered network if the signed
-    matrix isn't stored (older bundles) or the backbone collapses.
-    """
-    stored: nx.Graph = result.filtered_networks[fname]["graph"]
-    if sparsify in (None, "", "filter"):
-        return stored, "filter"
-    corr = getattr(result, "corr_prepared", None)
-    if corr is None:
-        return stored, "filter"
-    corr = np.asarray(corr, dtype=float)
-    try:
-        if sparsify == "percolation":
-            from multifunbrain.processing.backbone import filter_validated
-
-            g, _ = filter_validated(corr, method="percolation", weights="abs")
-        elif sparsify == "disparity":
-            from multifunbrain.processing.backbone import filter_validated
-
-            g, _ = filter_validated(corr, method="disparity", alpha=alpha, weights="positive")
-        elif sparsify == "threshold":
-            from multifunbrain.processing.filtering import filter_absolute_threshold
-
-            g, _ = filter_absolute_threshold(corr, threshold=threshold)
-        else:
-            return stored, "filter"
-    except (ValueError, np.linalg.LinAlgError):
-        return stored, "filter"
-    if g.number_of_nodes() == 0 or g.number_of_edges() == 0:
-        return stored, "filter"
-    return g, sparsify
-
-
 def _layouts(graph: nx.Graph, node_ids: list, scale: float = 600.0) -> dict:
     """A few named 2-D layouts (positions aligned to *node_ids*) for the client.
 
@@ -164,7 +125,7 @@ def network_spec(
     fname = resolve_filter(result, filter_name)
     if fname is None or fname not in result.filtered_networks:
         return {"kind": "network", "label": result.label, "error": "no filtered network"}
-    graph, eff_sparsify = _derive_graph(
+    graph, eff_sparsify = derive_graph(
         result, fname, sparsify, sparsify_alpha, sparsify_threshold
     )
     nodes_meta = surviving_labels(result)
@@ -198,13 +159,24 @@ def network_spec(
         )
 
     # Threshold edges by |weight| quantile so dense backbones stay readable.
-    all_w = np.array([abs(d.get("weight", 1.0)) for _, _, d in graph.edges(data=True)])
+    signed_w = np.array([d.get("weight", 1.0) for _, _, d in graph.edges(data=True)], dtype=float)
+    all_w = np.abs(signed_w)
     thresh = float(np.quantile(all_w, edge_quantile)) if all_w.size else 0.0
     edges = []
+    shown_w: list[float] = []
     for u, v, d in graph.edges(data=True):
-        w = d.get("weight", 1.0)
+        w = float(d.get("weight", 1.0))
         if abs(w) >= thresh:
-            edges.append({"source": str(int(u)), "target": str(int(v)), "weight": float(w)})
+            edges.append({"source": str(int(u)), "target": str(int(v)), "weight": w})
+            shown_w.append(w)
+
+    # Weight range (of the DRAWN edges) so the client can map colour + width laws.
+    sw = np.array(shown_w, dtype=float)
+    has_negative = bool((sw < 0).any()) if sw.size else False
+    w_min = float(sw.min()) if sw.size else 0.0
+    w_max = float(sw.max()) if sw.size else 0.0
+    w_absmax = float(np.abs(sw).max()) if sw.size else 0.0
+    w_absmin = float(np.abs(sw).min()) if sw.size else 0.0
 
     return clean(
         {
@@ -212,6 +184,7 @@ def network_spec(
             "label": result.label,
             "filter": fname,
             "sparsify": eff_sparsify,
+            "gamma_available": result_gamma(result) is not None,
             "nodes": nodes,
             "edges": edges,
             "layouts": layouts,
@@ -219,5 +192,10 @@ def network_spec(
             "n_edges_total": int(all_w.size),
             "n_edges_shown": len(edges),
             "edge_quantile": edge_quantile,
+            "w_min": w_min,
+            "w_max": w_max,
+            "w_absmax": w_absmax,
+            "w_absmin": w_absmin,
+            "has_negative": has_negative,
         }
     )
