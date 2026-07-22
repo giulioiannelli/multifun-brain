@@ -22,6 +22,7 @@ __all__ = [
     "compute_optimal_threshold",
     "prepared_graph_laplacian_spectrum",
     "hierarchical_partitions_from_corr",
+    "linkage_at_tau_min",
     "identify_switching_nodes",
     "get_moved_nodes",
     "get_moved_nodes_interval",
@@ -29,6 +30,60 @@ __all__ = [
     "local_partition_stability_index",
     "partition_flow_table",
 ]
+
+
+def linkage_at_tau_min(
+    graph: nx.Graph, *, normalized: bool = True
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """LRG diffusion-distance linkage of a graph at ``tau_min = 1 / lambda_max``.
+
+    ``tau_min`` (the reciprocal of the largest non-zero Laplacian eigenvalue) is
+    the finest informative diffusion scale — the smallest ``tau`` at which the
+    diffusion kernel still resolves the whole graph. Building the ultrametric
+    linkage there gives the most fully-resolved hierarchy, which is what the
+    dendrogram-comparison metrics (Baker's gamma, cophenetic shift) contrast
+    between two networks.
+
+    This is the single canonical home for the helper; ``scripts/april`` and the
+    dashboard both import it from here rather than re-deriving the chain.
+
+    Parameters
+    ----------
+    graph : nx.Graph
+        Weighted (edge attribute ``"weight"``) undirected graph — e.g. a LANS
+        backbone.
+    normalized : bool, default True
+        Use the symmetric-normalised Laplacian (matches the LRG hierarchy path).
+
+    Returns
+    -------
+    Z : np.ndarray
+        SciPy linkage matrix.
+    leaf_atlas_idx : np.ndarray of int
+        The graph-node id (atlas index) of each linkage leaf, in leaf order.
+    tau : float
+        ``1 / lambda_max``.
+
+    Raises
+    ------
+    RuntimeError
+        If the Laplacian has no non-zero eigenvalue (empty / edgeless graph).
+    """
+    from ..graphutils import compute_normalized_linkage
+
+    node_list = list(graph.nodes())
+    L, evals = graph_laplacian_and_spectrum(
+        graph, weight="weight", normalized=normalized
+    )
+    nonzero = evals[np.abs(evals) > 1e-9]
+    if nonzero.size == 0:
+        raise RuntimeError("Laplacian has no non-zero eigenvalues")
+    tau = 1.0 / float(nonzero.max())
+    dists_cond = symmetrized_inverse_distance(tau, lambda t: rho_matrix(t, L))
+    Z, _labels, _tmax = compute_normalized_linkage(
+        dists_cond, graph, labelList="numbers"
+    )
+    return Z, np.asarray(node_list, dtype=int), tau
 
 
 def compute_optimal_threshold(linkage_matrix, scaling_factor=1):

@@ -14,6 +14,10 @@ Baker, *J. Am. Stat. Assoc.* 69, 440 (1974) — Baker's gamma.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable
+
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.cluster.hierarchy import cophenet
@@ -27,6 +31,9 @@ __all__ = [
     "bakers_gamma",
     "per_leaf_cophenetic_shift",
     "specific_heat_comparison",
+    "HierarchyComparison",
+    "compare_hierarchies",
+    "null_shift_distribution",
 ]
 
 
@@ -228,6 +235,185 @@ def per_leaf_cophenetic_shift(
     if normalize:
         per_leaf = per_leaf / n_pairs
     return per_leaf
+
+
+@dataclass
+class HierarchyComparison:
+    """Result of :func:`compare_hierarchies` on a shared leaf (ROI) set.
+
+    All per-ROI arrays are aligned 1-to-1 with ``common`` (the sorted
+    intersection of the two trees' atlas indices).
+    """
+
+    common: np.ndarray  # atlas indices present in both trees (sorted)
+    bakers_gamma: float  # Kendall-tau of cophenetic ranks on the common set
+    cophenetic_r: float  # Pearson r of cophenetic distances on the common set
+    shift: np.ndarray  # per-ROI cophenetic-rank shift in [0, 1] (observed)
+    null_median: np.ndarray  # per-ROI null median (NaN where no null)
+    null_p95: np.ndarray  # per-ROI null 95th percentile (NaN where no null)
+    null_n_samples: np.ndarray  # per-ROI number of null samples
+    calibrated: np.ndarray  # observed - null_median (NaN where no null)
+    pooled_null: np.ndarray = field(default_factory=lambda: np.array([]))
+
+    @property
+    def has_null(self) -> bool:
+        return bool(np.isfinite(self.null_median).any())
+
+    @property
+    def n_common(self) -> int:
+        return int(self.common.size)
+
+
+def _aligned_cophenetic_indices(
+    leaf_atlas_a: ArrayLike, leaf_atlas_b: ArrayLike
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """``(common, idx_a, idx_b)`` for the shared atlas indices of two leaf sets."""
+    a = np.asarray(leaf_atlas_a, dtype=int)
+    b = np.asarray(leaf_atlas_b, dtype=int)
+    common = np.array(sorted(set(a.tolist()) & set(b.tolist())), dtype=int)
+    pos_a = {int(r): k for k, r in enumerate(a.tolist())}
+    pos_b = {int(r): k for k, r in enumerate(b.tolist())}
+    idx_a = np.array([pos_a[r] for r in common.tolist()], dtype=int)
+    idx_b = np.array([pos_b[r] for r in common.tolist()], dtype=int)
+    return common, idx_a, idx_b
+
+
+def compare_hierarchies(
+    linkage_a: np.ndarray,
+    leaf_atlas_a: ArrayLike,
+    linkage_b: np.ndarray,
+    leaf_atlas_b: ArrayLike,
+    *,
+    null_per_atlas: dict[int, list[float]] | None = None,
+) -> HierarchyComparison:
+    """Full pairwise dendrogram comparison on the shared leaf (ROI) set.
+
+    The matplotlib-free compute core behind the collaborator's ``fig6`` figure:
+    Baker's gamma and cophenetic correlation on the intersection of the two
+    trees' leaves, the per-ROI cophenetic-rank shift (0 = same neighbourhood,
+    1 = maximally reorganised), and — if a null distribution is supplied — the
+    calibrated shift ``observed - null_median`` (> 0 reorganised beyond chance,
+    < 0 more stable than chance).
+
+    Parameters
+    ----------
+    linkage_a, linkage_b : np.ndarray
+        SciPy linkage matrices (e.g. from :func:`linkage_at_tau_min`).
+    leaf_atlas_a, leaf_atlas_b : array-like of int
+        Atlas index of each linkage leaf, in leaf order. The two trees may be
+        built on different surviving-ROI sets; they are intersected.
+    null_per_atlas : dict, optional
+        ``{atlas_index: [shift, ...]}`` from :func:`null_shift_distribution`.
+
+    Returns
+    -------
+    HierarchyComparison
+    """
+    common, idx_a, idx_b = _aligned_cophenetic_indices(leaf_atlas_a, leaf_atlas_b)
+    n = int(common.size)
+    if n < 4:
+        empty = np.full(n, np.nan)
+        return HierarchyComparison(
+            common=common, bakers_gamma=float("nan"), cophenetic_r=float("nan"),
+            shift=np.zeros(n), null_median=empty, null_p95=empty,
+            null_n_samples=np.zeros(n, dtype=int), calibrated=empty,
+        )
+
+    coph_a = squareform(cophenet(linkage_a))[np.ix_(idx_a, idx_a)]
+    coph_b = squareform(cophenet(linkage_b))[np.ix_(idx_b, idx_b)]
+    iu = np.triu_indices(n, k=1)
+    bg, _ = kendalltau(coph_a[iu], coph_b[iu])
+    cc, _ = pearsonr(coph_a[iu], coph_b[iu])
+
+    shift = per_leaf_cophenetic_shift(linkage_a, linkage_b, idx_a, idx_b)
+
+    null_median = np.full(n, np.nan, dtype=float)
+    null_p95 = np.full(n, np.nan, dtype=float)
+    null_n = np.zeros(n, dtype=int)
+    pooled: list[float] = []
+    if null_per_atlas is not None:
+        for i, atlas_idx in enumerate(common.tolist()):
+            samples = null_per_atlas.get(int(atlas_idx), [])
+            if len(samples) >= 3:
+                null_median[i] = float(np.median(samples))
+                null_p95[i] = float(np.percentile(samples, 95))
+                null_n[i] = len(samples)
+            pooled.extend(float(s) for s in samples)
+    calibrated = shift - np.where(np.isfinite(null_median), null_median, 0.0)
+    calibrated = np.where(np.isfinite(null_median), calibrated, np.nan)
+
+    return HierarchyComparison(
+        common=common,
+        bakers_gamma=float(bg),
+        cophenetic_r=float(cc),
+        shift=shift,
+        null_median=null_median,
+        null_p95=null_p95,
+        null_n_samples=null_n,
+        calibrated=calibrated,
+        pooled_null=np.asarray(pooled, dtype=float),
+    )
+
+
+def null_shift_distribution(
+    graph_a,
+    label_a: str,
+    graph_b,
+    label_b: str,
+    *,
+    n_surrogates: int,
+    cache_dir: str | Path,
+    rng_seed: int = 0,
+    linkage_fn: Callable | None = None,
+) -> dict[int, list[float]]:
+    """Strength-preserving null distribution of per-ROI cophenetic shifts.
+
+    For each surrogate ``i``, independently strength-preserving-rewire both
+    graphs (Rubinov & Sporns 2011), build their LRG linkages, and record the
+    per-ROI shift on the common ROIs. Aggregated per atlas index. Surrogate
+    linkages are cached on disk (resumable), so re-running a pair is cheap.
+
+    This is the right null for claims about diffusion-on-network structure: it
+    asks whether the observed reorganisation exceeds what edge-randomisation at
+    fixed node strength would produce.
+    """
+    from ...processing.null_models import cached_surrogate_linkages
+    from .partitions import linkage_at_tau_min
+
+    if linkage_fn is None:
+        linkage_fn = linkage_at_tau_min
+    cache_dir = Path(cache_dir)
+    surrogate_cache = cache_dir / "surrogates"
+
+    # The surrogate-cache filename stem encodes the rng seed, so that comparing a
+    # graph against ITSELF (label_a == label_b) still draws two INDEPENDENT
+    # surrogate sets (seeds ``rng_seed`` and ``rng_seed + 100_000``) rather than
+    # graph B silently reloading graph A's file and collapsing the null to zero.
+    seed_a = rng_seed
+    seed_b = rng_seed + 100_000
+    surrogates_a = cached_surrogate_linkages(
+        graph_a, f"{label_a}__s{seed_a}", n_surrogates, surrogate_cache,
+        linkage_fn=linkage_fn, rng_seed=seed_a,
+    )
+    surrogates_b = cached_surrogate_linkages(
+        graph_b, f"{label_b}__s{seed_b}", n_surrogates, surrogate_cache,
+        linkage_fn=linkage_fn, rng_seed=seed_b,
+    )
+
+    null_per_atlas: dict[int, list[float]] = {}
+    n_eff = min(len(surrogates_a), len(surrogates_b))
+    for i in range(n_eff):
+        common, idx_a, idx_b = _aligned_cophenetic_indices(
+            surrogates_a[i]["leaf_atlas_idx"], surrogates_b[i]["leaf_atlas_idx"]
+        )
+        if common.size < 4:
+            continue
+        shift = per_leaf_cophenetic_shift(
+            surrogates_a[i]["linkage"], surrogates_b[i]["linkage"], idx_a, idx_b
+        )
+        for k, atlas_idx in enumerate(common.tolist()):
+            null_per_atlas.setdefault(int(atlas_idx), []).append(float(shift[k]))
+    return null_per_atlas
 
 
 def specific_heat_comparison(

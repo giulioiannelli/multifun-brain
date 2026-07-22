@@ -4,17 +4,33 @@
 
 from __future__ import annotations
 
+import networkx as nx
 import numpy as np
 import pytest
 from scipy.cluster.hierarchy import linkage
 
 from multifunbrain.analysis.lrg.compare import (
     bakers_gamma,
+    compare_hierarchies,
     cophenetic_correlation,
+    null_shift_distribution,
     per_leaf_cophenetic_shift,
     reduced_mutual_information,
     specific_heat_comparison,
 )
+from multifunbrain.analysis.lrg.partitions import linkage_at_tau_min
+
+
+def _block_graph(seed: int = 0, weak: float = 0.08) -> nx.Graph:
+    r = np.random.default_rng(seed)
+    n_per, k = 8, 3
+    n = n_per * k
+    A = np.zeros((n, n))
+    for i in range(n):
+        for j in range(i + 1, n):
+            same = (i // n_per) == (j // n_per)
+            A[i, j] = A[j, i] = abs(r.normal(0.7 if same else weak, 0.03))
+    return nx.from_numpy_array(A)
 
 
 def _toy_linkage(n: int, seed: int = 0):
@@ -135,6 +151,84 @@ class TestPerLeafCopheneticShift:
         d_raw = per_leaf_cophenetic_shift(link_a, link_b, normalize=False)
         n_pairs = 15 * 14 // 2
         assert np.allclose(d_raw, d_norm * n_pairs)
+
+
+class TestLinkageAtTauMin:
+    def test_returns_linkage_leaves_and_tau(self):
+        g = _block_graph()
+        Z, leaf_atlas, tau = linkage_at_tau_min(g)
+        n = g.number_of_nodes()
+        assert Z.shape == (n - 1, 4)
+        assert leaf_atlas.shape == (n,)
+        # Leaf atlas ids are the graph's own node ids, in node order.
+        assert leaf_atlas.tolist() == list(g.nodes())
+        assert tau > 0
+
+    def test_empty_graph_raises(self):
+        g = nx.Graph()
+        g.add_nodes_from(range(4))  # no edges -> degenerate Laplacian
+        with pytest.raises(RuntimeError):
+            linkage_at_tau_min(g)
+
+
+class TestCompareHierarchies:
+    def test_identical_hierarchies(self):
+        g = _block_graph(seed=3)
+        Z, leaf, _ = linkage_at_tau_min(g)
+        cmp = compare_hierarchies(Z, leaf, Z, leaf)
+        assert cmp.n_common == g.number_of_nodes()
+        assert cmp.bakers_gamma == pytest.approx(1.0)
+        assert cmp.cophenetic_r == pytest.approx(1.0)
+        assert np.allclose(cmp.shift, 0.0)
+        assert not cmp.has_null
+
+    def test_different_hierarchies_finite(self):
+        Za, la, _ = linkage_at_tau_min(_block_graph(seed=1))
+        Zb, lb, _ = linkage_at_tau_min(_block_graph(seed=2, weak=0.25))
+        cmp = compare_hierarchies(Za, la, Zb, lb)
+        assert cmp.n_common == 24
+        assert -1.0 <= cmp.bakers_gamma <= 1.0
+        assert np.all(np.isfinite(cmp.shift))
+        assert cmp.shift.min() >= 0.0 and cmp.shift.max() <= 1.0
+
+    def test_intersection_on_disjoint_node_sets(self):
+        # Two graphs whose node ids only partly overlap -> compare on the overlap.
+        ga = _block_graph(seed=1)
+        gb = nx.relabel_nodes(_block_graph(seed=2), {i: i + 6 for i in range(24)})
+        Za, la, _ = linkage_at_tau_min(ga)
+        Zb, lb, _ = linkage_at_tau_min(gb)
+        cmp = compare_hierarchies(Za, la, Zb, lb)
+        assert cmp.n_common == 18  # nodes 6..23 shared
+        assert np.all(np.isfinite(cmp.shift))
+
+
+class TestNullShiftDistribution:
+    def test_returns_samples_per_atlas(self, tmp_path):
+        ga, gb = _block_graph(seed=1), _block_graph(seed=2, weak=0.2)
+        null = null_shift_distribution(
+            ga, "A", gb, "B", n_surrogates=4, cache_dir=tmp_path,
+        )
+        assert isinstance(null, dict)
+        assert len(null) > 0
+        # Each ROI accumulates up to n_surrogates samples.
+        assert all(1 <= len(v) <= 4 for v in null.values())
+        assert all(np.isfinite(x) for v in null.values() for x in v)
+
+    def test_calibrated_shift_uses_null(self, tmp_path):
+        Za, la, _ = linkage_at_tau_min(_block_graph(seed=1))
+        Zb, lb, _ = linkage_at_tau_min(_block_graph(seed=2, weak=0.2))
+        null = null_shift_distribution(
+            _block_graph(seed=1), "A", _block_graph(seed=2, weak=0.2), "B",
+            n_surrogates=5, cache_dir=tmp_path,
+        )
+        cmp = compare_hierarchies(Za, la, Zb, lb, null_per_atlas=null)
+        assert cmp.has_null
+        assert cmp.pooled_null.size > 0
+        # Calibrated = observed - null_median where a null exists.
+        mask = np.isfinite(cmp.null_median)
+        assert np.allclose(
+            cmp.calibrated[mask], cmp.shift[mask] - cmp.null_median[mask]
+        )
 
 
 class TestSpecificHeatComparison:
