@@ -11,6 +11,9 @@ export function Brain3D({
   mode,
   edgeQuantile,
   nodeSize = 9,
+  sparsify,
+  sparsifyAlpha = 0.05,
+  sparsifyThreshold = 0.3,
 }: {
   dataset: string;
   label: string;
@@ -18,10 +21,18 @@ export function Brain3D({
   mode: "connectome" | "markers";
   edgeQuantile: number;
   nodeSize?: number;
+  sparsify?: string;
+  sparsifyAlpha?: number;
+  sparsifyThreshold?: number;
 }) {
   const params: QueryParams = { dataset, label, mode, node_size: nodeSize };
   if (filter) params.filter = filter;
   if (mode === "connectome") params.edge_quantile = edgeQuantile;
+  if (sparsify && sparsify !== "filter") {
+    params.sparsify = sparsify;
+    params.sparsify_alpha = sparsifyAlpha;
+    params.sparsify_threshold = sparsifyThreshold;
+  }
 
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

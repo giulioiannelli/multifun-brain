@@ -159,6 +159,73 @@ body {
   margin: 0 auto;
 }
 
+/* Network graphs are roughly 1:1 — keep the Cytoscape canvas square and centred
+   instead of a wide rectangle. The child <CytoscapeComponent> fills 100%/100%. */
+.network-square {
+  width: 100%;
+  max-width: 720px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+}
+
+/* Compare tab: two stacked faceted selectors (A vs B) + a metrics strip. */
+.compare-selectors {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.compare-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.compare-tag {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fff;
+}
+.compare-tag-a { background: #B71C1C; }
+.compare-tag-b { background: #1565C0; }
+.compare-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0 14px;
+}
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  min-width: 90px;
+}
+.metric-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.metric-val {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.metric-val.small {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .plot-head {
   display: flex;
   align-items: center;
