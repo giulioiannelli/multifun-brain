@@ -25,12 +25,15 @@ export interface CatalogResponse {
   datasets: Dataset[];
 }
 
-// Signal tab: raw ROI timecourses, keyed by (subject, contrast, processing).
-// `contrast` is "" for the older kw datasets (no co2/rest).
+// Signal tab: raw ROI timecourses. Three display facets — task (co2/rest),
+// contrast (modality: bold/vaso/cbf/noise), processing (clean/optcom/…) — plus
+// `token`, the original filename variant that the backend resolves files by.
 export interface SignalEntry {
   subject: string;
-  contrast: string;
-  processing: string;
+  task: string | null; // co2 / rest, or null (kw sets)
+  contrast: string | null; // imaging modality
+  processing: string; // normalized pipeline label
+  token: string; // original desc/kw token (backend file key)
 }
 
 // One selectable raw dataset (a raw_data_<id> directory).
@@ -45,10 +48,12 @@ export interface RawDataset {
 export interface SignalCatalog {
   dataset: string;
   datasets: RawDataset[];
-  has_contrast: boolean;
+  has_task: boolean; // dataset has a co2/rest task axis (April)
+  has_contrast: boolean; // dataset has a modality contrast (now all sets)
   entries: SignalEntry[];
   subjects: string[];
-  contrasts: string[];
+  tasks: string[];
+  contrasts: string[]; // modalities
   processings: string[];
   region_names: string[];
   n_regions: number;
