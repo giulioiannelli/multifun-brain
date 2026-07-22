@@ -5,6 +5,17 @@ backend reuses the `multifunbrain` library (loads result bundles, serialises the
 to JSON plot specs) and serves a React + Plotly frontend from a single port — so
 collaborators open **one localhost URL**, no code required.
 
+> **Just getting started?** Don't read this whole file — follow
+> **[`../SETUP.md`](../SETUP.md)**, the cross-platform clone→browser guide. The
+> short version, from a fresh clone on Windows/macOS/Linux:
+> ```bash
+> conda env create -f multifun-brain.yml && conda activate multifun-brain
+> python quickstart.py            # auto-detects data, caches results, builds, serves
+> ```
+> `python quickstart.py serve` is the everyday launch (after `git pull`). The rest
+> of this file is the **deep reference** — data locations, env overrides, the
+> result-bundle label scheme, and the dev/hot-reload workflow.
+
 ---
 
 > **Who needs to install what?** Node.js is needed **only to build the frontend

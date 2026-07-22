@@ -5,6 +5,24 @@ The package bundles synthetic network generators, correlation-network analysis
 helpers, diffusion-based metrics, and lightweight visualisation utilities that can
 be combined for computational experiments or reproducible demos.
 
+## 🧠 Just want to see the results? Run the dashboard
+
+An interactive browser dashboard visualises the analysis results — no coding. From
+a fresh clone, on **Windows, macOS or Linux**, it's one command:
+
+```bash
+conda env create -f multifun-brain.yml && conda activate multifun-brain
+# put the shared data folder at ./data  (ask the maintainer)
+python quickstart.py
+```
+
+`quickstart.py` installs everything, **auto-detects your data folder** (atlas,
+subjects, variants), **computes and caches** any missing results, builds the UI,
+and opens `http://localhost:8000`. After a `git pull`, just
+`python quickstart.py serve`.
+
+👉 **Full step-by-step guide (clone → browser): [`SETUP.md`](SETUP.md).**
+
 ## Why multifun-brain?
 
 - **Research ready** – prototype multi-scale brain network experiments with
@@ -134,15 +152,17 @@ mkdocs serve
 ## Interactive dashboard
 
 A browser GUI lets non-coder collaborators explore analysis results from a single
-localhost URL — no notebooks, no code. Minimal setup:
+localhost URL — no notebooks, no code. The one-command, cross-platform setup:
 
 ```bash
-pip install -e ".[dashboard]"     # adds FastAPI + uvicorn (one-time)
-./dashboard/run.sh                # builds the frontend once, serves http://localhost:8000
+python quickstart.py              # installs, detects data, caches results, builds, serves
+python quickstart.py serve        # everyday launch (after git pull)
 ```
 
-See [`dashboard/README.md`](dashboard/README.md) for how result bundles must be
-placed (including the per-subject structure) and the full run/dev instructions.
+On macOS/Linux, `./dashboard/run.sh` is an equivalent shortcut. See
+**[`SETUP.md`](SETUP.md)** for the full clone→browser walkthrough, and
+[`dashboard/README.md`](dashboard/README.md) for the deep reference (data
+locations, the per-subject bundle scheme, env overrides, dev/hot-reload).
 
 ## Project layout
 
@@ -185,7 +205,7 @@ multifun-brain is released under the [MIT License](LICENSE).
 If you use this project in academic work, please cite it as:
 
 > Multifun-Brain Developers. (2024). *multifun-brain* (Version 0.2.0) [Computer
-> software]. https://github.com/your-org/multifun-brain
+> software]. https://github.com/giulioiannelli/multifun-brain
 
 ## Acknowledgements
 
