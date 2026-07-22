@@ -11,6 +11,15 @@ const QUALITATIVE = [
   "#e377c2", "#7f7f7f", "#bcbd22", "#17becf", "#393b79", "#637939",
 ];
 
+// Shared with the backend _LRG_PALETTE so a cluster keeps one colour across the
+// dendrogram, partition-flow raster and Sankey.
+const LRG_PALETTE = [
+  "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+  "#e377c2", "#17becf", "#bcbd22", "#393b79", "#637939", "#8c6d31",
+  "#843c39", "#7b4173", "#5254a3", "#e7969c", "#a55194", "#6b6ecf",
+];
+const CUT_GREY = "#c2c2c2";
+
 export interface Figure {
   data: any[];
   layout: Record<string, any>;
@@ -348,32 +357,92 @@ export function buildDegree(spec: PlotSpec): Figure {
   };
 }
 
-// LRG dendrogram from a SciPy layout (icoord/dcoord) — log distance axis,
-// zeros floored, optional flat-threshold cut line.
-export function buildDendrogram(spec: PlotSpec): Figure {
+// Colour every drawn dendrogram link for a cut at height h — entirely client-side
+// (union-find over the linkage), so the height slider recolours instantly with no
+// server round-trip. A link merging below h is coloured by the cluster it belongs
+// to (LRG_PALETTE, ordered left-to-right to mirror SciPy); links above h are grey.
+// Returns the per-link colours (aligned to icoord/dcoord) and the cluster count.
+export function colorDendrogram(spec: PlotSpec, h: number): { colors: string[]; nClusters: number } {
+  const n: number = spec.n_leaves ?? 0;
+  const Z: number[][] = spec.linkage ?? [];
+  const linkIds: number[] = spec.link_ids ?? [];
+  const leaves: number[] = spec.leaves ?? [];
+  if (!n || !Z.length) return { colors: linkIds.map(() => CUT_GREY), nClusters: 0 };
+
+  const parent = new Int32Array(2 * n - 1);
+  for (let i = 0; i < parent.length; i++) parent[i] = i;
+  const find = (x: number): number => {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    return x;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent[ra] = rb;
+  };
+  for (let i = 0; i < Z.length; i++) {
+    if (Z[i][2] <= h) { union(Z[i][0], Z[i][1]); union(n + i, Z[i][0]); }
+  }
+
+  // Stable colour order: index clusters by their leftmost leaf position.
+  const leafPos = new Map<number, number>();
+  leaves.forEach((lid, p) => leafPos.set(lid, p));
+  const rootMinPos = new Map<number, number>();
+  for (let leaf = 0; leaf < n; leaf++) {
+    const r = find(leaf);
+    const p = leafPos.get(leaf) ?? leaf;
+    if (!rootMinPos.has(r) || p < (rootMinPos.get(r) as number)) rootMinPos.set(r, p);
+  }
+  const colorOfRoot = new Map<number, number>();
+  [...rootMinPos.entries()].sort((a, b) => a[1] - b[1]).forEach(([r], idx) => colorOfRoot.set(r, idx));
+
+  const colors = linkIds.map((nodeId) => {
+    const mergeIdx = nodeId - n;
+    if (mergeIdx < 0 || mergeIdx >= Z.length || Z[mergeIdx][2] > h) return CUT_GREY;
+    const ci = colorOfRoot.get(find(nodeId));
+    return ci === undefined ? CUT_GREY : LRG_PALETTE[ci % LRG_PALETTE.length];
+  });
+  return { colors, nClusters: colorOfRoot.size };
+}
+
+// LRG dendrogram from a SciPy layout (icoord/dcoord) — log distance axis, zeros
+// floored. Branches are coloured client-side by the cut at height `cutHeight`
+// (defaults to the LRG's natural flat_threshold); a dotted line marks the cut and
+// the title reports the clusters it yields. Dragging the cut only re-runs this
+// builder — no refetch.
+export function buildDendrogram(spec: PlotSpec, cutHeight?: number): Figure {
   const floor = (spec.dcoord_min_positive ?? 1e-3) * 0.5;
+  const h = cutHeight != null && cutHeight > 0 ? cutHeight : (spec.flat_threshold ?? null);
+  const { colors, nClusters } = h != null ? colorDendrogram(spec, h) : { colors: [], nClusters: 0 };
   const traces = (spec.icoord ?? []).map((xs: number[], i: number) => ({
     type: "scatter",
     mode: "lines",
     x: xs,
     y: spec.dcoord[i].map((v: number) => (v <= 0 ? floor : v)),
-    line: { color: "#4a4a4a", width: 1 },
+    line: { color: colors[i] ?? "#4a4a4a", width: 1.3 },
     hoverinfo: "skip",
     showlegend: false,
   }));
   const ivl: string[] = spec.ivl ?? [];
   const shapes: any[] = [];
-  if (spec.flat_threshold != null && spec.flat_threshold > floor) {
+  const annotations: any[] = [];
+  if (h != null && h > floor) {
     shapes.push({
       type: "line", xref: "paper", x0: 0, x1: 1,
-      y0: spec.flat_threshold, y1: spec.flat_threshold,
-      line: { color: "#D32F2F", width: 1, dash: "dot" },
+      y0: h, y1: h,
+      line: { color: "#D32F2F", width: 1.2, dash: "dot" },
+    });
+    annotations.push({
+      xref: "paper", yref: "y", x: 1, y: h, xanchor: "right", yanchor: "bottom",
+      showarrow: false, text: `cut h=${Number(h).toPrecision(3)} · ${nClusters} clusters`,
+      font: { size: 10, color: "#D32F2F" },
     });
   }
+  const cutTxt = h != null ? ` · cut → ${nClusters} clusters` : "";
+  const tau = typeof spec.tau === "number" ? spec.tau.toPrecision(3) : spec.tau;
   return {
     data: traces,
     layout: {
-      title: { text: `dendrogram · τ=${spec.tau} · ${spec.n_clusters} clusters` },
+      title: { text: `dendrogram · τ=${tau}${cutTxt}` },
       height: 520,
       xaxis: {
         tickmode: "array",
@@ -385,7 +454,81 @@ export function buildDendrogram(spec: PlotSpec): Figure {
       },
       yaxis: { type: "log", title: { text: "diffusion distance" } },
       shapes,
+      annotations,
       margin: { l: 70, r: 20, t: 44, b: 90 },
+    },
+  };
+}
+
+// LRG specific heat C(τ) = −dS/d·log τ vs τ (log axis). Peaks mark characteristic
+// diffusion scales; τ′ = 1/λmax and τ* (peak) are dashed/dotted, and the currently
+// selected τ (the dendrogram slider) is a solid marker so the two views stay tied.
+export function buildSpecificHeat(spec: PlotSpec, opts: { currentTau?: number } = {}): Figure {
+  const tau: number[] = spec.tau ?? [];
+  const c: number[] = spec.C ?? [];
+  const shapes: any[] = [];
+  const annotations: any[] = [];
+  const vline = (x: number | null | undefined, color: string, dash: string, label: string) => {
+    if (x == null || !(x > 0)) return;
+    shapes.push({ type: "line", xref: "x", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.4, dash } });
+    annotations.push({ xref: "x", x, yref: "paper", y: 1, yanchor: "bottom", showarrow: false, text: label, font: { size: 10, color } });
+  };
+  vline(spec.tau_prime, "#888", "dash", "τ′");
+  vline(spec.tau_star, "#1976D2", "dot", "τ*");
+  vline(opts.currentTau, "#D32F2F", "solid", "τ");
+  const tstar = spec.tau_star ? Number(spec.tau_star).toPrecision(3) : "?";
+  return {
+    data: [{
+      type: "scatter", mode: "lines", x: tau, y: c,
+      line: { color: "#1976D2", width: 2 },
+      hovertemplate: "τ=%{x:.3g}<br>C=%{y:.3f}<extra></extra>", showlegend: false,
+    }],
+    layout: {
+      title: { text: `specific heat C(τ) · τ*≈${tstar}` },
+      height: 340,
+      xaxis: { type: "log", title: { text: "τ (diffusion time)" } },
+      yaxis: { title: { text: "C(τ) = −dS/d·log τ" } },
+      shapes, annotations,
+      margin: { l: 56, r: 16, t: 44, b: 44 },
+    },
+  };
+}
+
+// LRG partition-stability Ψ(n) vs number of clusters at the current τ. The peak
+// (highlighted) is the most stable cut — the "where to cut" the dendrogram.
+export function buildPsi(spec: PlotSpec): Figure {
+  const psi: number[] = spec.psi ?? [];
+  const nc: number[] = spec.n_clusters ?? [];
+  const optK: number | undefined = spec.optimal_n_clusters;
+  const optPsi: number | undefined = spec.optimal_psi;
+  const annotations: any[] = [];
+  if (optK != null && optPsi != null) {
+    annotations.push({
+      x: optK, y: optPsi, xref: "x", yref: "y", text: `optimal → ${optK} clusters`,
+      showarrow: true, arrowhead: 2, ax: 0, ay: -28, font: { size: 10, color: "#D32F2F" },
+    });
+  }
+  const data: any[] = [{
+    type: "scatter", mode: "lines+markers", x: nc, y: psi,
+    line: { color: "#8c564b", width: 1.5 }, marker: { size: 4, color: "#8c564b" },
+    hovertemplate: "%{x} clusters<br>Ψ=%{y:.3f}<extra></extra>", showlegend: false,
+  }];
+  if (optK != null && optPsi != null) {
+    data.push({
+      type: "scatter", mode: "markers", x: [optK], y: [optPsi],
+      marker: { size: 12, color: "#D32F2F", symbol: "circle-open", line: { width: 2 } },
+      hoverinfo: "skip", showlegend: false,
+    });
+  }
+  return {
+    data,
+    layout: {
+      title: { text: `partition stability Ψ(n) · peak at ${optK ?? "?"} clusters` },
+      height: 340,
+      xaxis: { title: { text: "number of clusters" } },
+      yaxis: { title: { text: "Ψ (stability)" } },
+      annotations,
+      margin: { l: 56, r: 16, t: 44, b: 44 },
     },
   };
 }
@@ -401,7 +544,9 @@ function discreteColorscale(maxId: number): [number, string][] {
   return stops;
 }
 
-// Partition-flow raster: rows = nodes, cols = tau, colour = cluster id.
+// Community-membership raster: rows = nodes (sorted into merging bands), cols = τ,
+// colour = cross-τ-consistent community id (so a band keeps its colour while it
+// stays one community). See _canonical_labels on the backend.
 export function buildPartitionFlow(spec: PlotSpec): Figure {
   const maxId = Math.max(
     0,
@@ -419,11 +564,11 @@ export function buildPartitionFlow(spec: PlotSpec): Figure {
         zmin: 0,
         zmax: maxId + 1,
         showscale: false,
-        hovertemplate: "node %{y}<br>τ %{x}<br>cluster %{z}<extra></extra>",
+        hovertemplate: "node %{y}<br>τ %{x}<br>community %{z}<extra></extra>",
       },
     ],
     layout: {
-      title: { text: "partition flow across τ" },
+      title: { text: `community membership across τ · ${(spec.n_communities ?? maxId + 1)} communities` },
       height: 640,
       xaxis: { title: { text: "τ" }, type: "category" },
       yaxis: { tickfont: { size: 6 }, showticklabels: showTicks, autorange: "reversed" },
@@ -744,26 +889,49 @@ export function buildBandReconstruction(spec: PlotSpec): Figure {
   return { data, layout };
 }
 
-// Community-flow Sankey across consecutive tau steps.
+// Community-flow Sankey across consecutive τ. Nodes sit in τ columns (node_x) and
+// are coloured by their cross-τ community; links inherit the source community's
+// colour so a community's thread is traceable as it merges/splits. τ values are
+// annotated above their columns.
 export function buildSankey(spec: PlotSpec): Figure {
+  const taus: number[] = spec.taus ?? [];
+  const T = spec.n_steps ?? taus.length;
+  const nodeX: number[] | undefined = spec.node_x;
+  const annotations = taus.map((t, i) => ({
+    xref: "paper", yref: "paper",
+    x: T > 1 ? i / (T - 1) : 0.5, y: 1.04,
+    xanchor: "center", yanchor: "bottom", showarrow: false,
+    text: `τ=${t.toPrecision(2)}`, font: { size: 10, color: "#555" },
+  }));
   return {
     data: [
       {
         type: "sankey",
         orientation: "h",
+        arrangement: nodeX ? "snap" : "freeform",
         node: {
           label: spec.node_labels ?? [],
+          ...(nodeX ? { x: nodeX, y: nodeX.map(() => 0.5) } : {}),
+          color: spec.node_color ?? undefined,
           pad: 12,
           thickness: 14,
           line: { color: "#bbb", width: 0.5 },
+          hovertemplate: "%{label}<br>%{value} nodes<extra></extra>",
         },
         link: {
           source: spec.source ?? [],
           target: spec.target ?? [],
           value: spec.value ?? [],
+          color: spec.link_color ?? undefined,
+          hovertemplate: "%{source.label} → %{target.label}<br>%{value} nodes<extra></extra>",
         },
       },
     ],
-    layout: { title: { text: "community flow (Sankey) across τ" }, height: 520 },
+    layout: {
+      title: { text: "community flow (Sankey) across τ" },
+      height: 560,
+      margin: { l: 10, r: 10, t: 68, b: 20 },
+      annotations,
+    },
   };
 }

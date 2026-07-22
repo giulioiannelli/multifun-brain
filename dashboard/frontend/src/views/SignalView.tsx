@@ -1,17 +1,26 @@
 // Signal tab: raw ROI timecourses straight from the .ts.1D hand-off (no
-// pipeline). A Dataset dropdown switches between the raw_data_<id> sets. Two
-// modes (when the dataset has a co2/rest contrast):
+// pipeline). A Dataset dropdown switches between the raw_data_<id> sets, then
+// three facet dropdowns — Task (co2/rest), Contrast (modality: bold/vaso/cbf/
+// noise) and Processing (clean/optcom/…). The facets are parsed from the
+// filename token; the selection is resolved back to that original token, which
+// the backend still keys files by (so file loading is unchanged).
 //   • Per subject — carpet + single channel + EMD + per-band reconstruction.
 //   • Cohort (EMD bands) — histogram of every IMF's characteristic frequency
 //     pooled across the cohort, defining the s5/s4/s* bands.
-// The older kw datasets have no contrast / no TR, so only the per-subject
-// carpet + channel + EMD views show for them (no cohort / band analysis).
+// Cohort / band analysis needs the co2/rest task design (the April set); the
+// task-less kw sets show only the per-subject carpet + channel + EMD views.
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { PlotPanel } from "../components/PlotPanel";
 import type { QueryParams, SignalCatalog } from "../types";
 
-const CONTRAST_LABEL: Record<string, string> = { co2: "CO₂", rest: "rest" };
+const TASK_LABEL: Record<string, string> = { co2: "CO₂", rest: "rest" };
+const CONTRAST_LABEL: Record<string, string> = {
+  bold: "BOLD", vaso: "VASO", cbf: "CBF", noise: "noise",
+};
+// Sentinel subject: the cross-subject mean timecourse (kept in sync with the
+// backend timeseries.AVG_SUBJECT). Carpet / channel / EMD / bands all honour it.
+const AVG_SUBJECT = "__avg__";
 type Mode = "subject" | "cohort";
 
 export function SignalView() {
@@ -21,8 +30,9 @@ export function SignalView() {
   const [dataset, setDataset] = useState<string>(""); // "" = server default
   const [mode, setMode] = useState<Mode>("subject");
   const [subject, setSubject] = useState<string>("");
-  const [contrast, setContrast] = useState<string>("");
-  const [processing, setProcessing] = useState<string>("");
+  const [task, setTask] = useState<string>(""); // co2 / rest, "" if task-less
+  const [contrast, setContrast] = useState<string>(""); // modality
+  const [processing, setProcessing] = useState<string>(""); // pipeline label
   const [channel, setChannel] = useState<number>(0);
   const [normalize, setNormalize] = useState<boolean>(true);
   const [bandsYLog, setBandsYLog] = useState<boolean>(false);
@@ -40,6 +50,7 @@ export function SignalView() {
         const first = c.entries[0];
         if (first) {
           setSubject(first.subject);
+          setTask(first.task ?? "");
           setContrast(first.contrast ?? "");
           setProcessing(first.processing);
         }
@@ -51,51 +62,68 @@ export function SignalView() {
     };
   }, [dataset]);
 
-  // Keep (subject, contrast, processing) on a real file within the dataset.
+  // Keep (subject, task, contrast, processing) on a real file; snap otherwise. The
+  // Average subject matches any real subject's file (the variant just needs to exist).
   useEffect(() => {
-    if (!cat || !cat.entries.length || !subject) return;
-    const exact = cat.entries.some(
-      (e) => e.subject === subject && e.contrast === contrast && e.processing === processing,
-    );
-    if (exact) return;
+    if (!cat || !cat.entries.length) return;
+    const subjOk = (e: (typeof cat.entries)[number]) =>
+      subject === AVG_SUBJECT || e.subject === subject;
+    const eq = (e: (typeof cat.entries)[number]) =>
+      subjOk(e) && (e.task ?? "") === task && (e.contrast ?? "") === contrast;
+    if (cat.entries.some((e) => eq(e) && e.processing === processing)) return;
     const fallback =
-      cat.entries.find((e) => e.subject === subject && e.contrast === contrast) ??
-      cat.entries.find((e) => e.subject === subject) ??
+      cat.entries.find(eq) ??
+      cat.entries.find((e) => subjOk(e) && (e.task ?? "") === task) ??
+      cat.entries.find(subjOk) ??
       cat.entries[0];
     if (fallback) {
-      setContrast(fallback.contrast);
+      setTask(fallback.task ?? "");
+      setContrast(fallback.contrast ?? "");
       setProcessing(fallback.processing);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cat, subject, contrast, processing]);
+  }, [cat, subject, task, contrast, processing]);
+
+  // Resolve the (task, contrast, processing) facets back to the original token
+  // the backend keys files by (subject-independent).
+  const token = useMemo(() => {
+    const e = cat?.entries.find(
+      (e) => (e.task ?? "") === task && (e.contrast ?? "") === contrast && e.processing === processing,
+    );
+    return e?.token ?? "";
+  }, [cat, task, contrast, processing]);
 
   const names = cat?.region_names ?? [];
-  const channelName = names[channel] ?? `region ${channel}`;
-  const hasContrast = cat?.has_contrast ?? true;
-  const effMode: Mode = hasContrast ? mode : "subject"; // cohort needs a contrast
+  const AVG_NAME = "⟨mean over regions⟩";
+  const channelName = channel < 0 ? AVG_NAME : (names[channel] ?? `region ${channel}`);
+  const hasTask = cat?.has_task ?? false; // cohort/band analysis needs the co2/rest design
+  const hasContrast = cat?.has_contrast ?? false;
+  const effMode: Mode = hasTask ? mode : "subject";
 
+  // API params still use (contrast = task, processing = token) — the backend
+  // resolution is unchanged; only the UI splits the token into facets.
   const fileParams: QueryParams = useMemo(
-    () => ({ dataset, subject, contrast, processing }),
-    [dataset, subject, contrast, processing],
+    () => ({ dataset, subject, contrast: task, processing: token }),
+    [dataset, subject, task, token],
   );
   const channelParams: QueryParams = useMemo(
-    () => ({ dataset, subject, contrast, processing, channel }),
-    [dataset, subject, contrast, processing, channel],
+    () => ({ dataset, subject, contrast: task, processing: token, channel }),
+    [dataset, subject, task, token, channel],
   );
   const cohortParams: QueryParams = useMemo(
-    () => ({ dataset, contrast, processing, scheme }),
-    [dataset, contrast, processing, scheme],
+    () => ({ dataset, contrast: task, processing: token, scheme }),
+    [dataset, task, token, scheme],
   );
   // Band reconstruction also depends on the scheme (channel/EMD panels don't).
   const bandParams: QueryParams = useMemo(
-    () => ({ dataset, subject, contrast, processing, channel, scheme }),
-    [dataset, subject, contrast, processing, channel, scheme],
+    () => ({ dataset, subject, contrast: task, processing: token, channel, scheme }),
+    [dataset, subject, task, token, channel, scheme],
   );
 
   if (error) return <div className="plot-error">Failed to load raw timecourses: {error}</div>;
   if (!cat) return <div className="hint">Loading raw timecourses…</div>;
 
-  const ready = Boolean(processing && (effMode === "cohort" || subject));
+  const ready = Boolean(token && (effMode === "cohort" || subject));
 
   return (
     <div className="explore">
@@ -105,12 +133,12 @@ export function SignalView() {
           <select value={dataset || cat.dataset} onChange={(e) => setDataset(e.target.value)}>
             {cat.datasets.map((d) => (
               <option key={d.id} value={d.id}>
-                {`${d.label} · ${d.n_subjects} subj${d.has_contrast ? "" : " · no contrast"}`}
+                {`${d.label} · ${d.n_subjects} subj`}
               </option>
             ))}
           </select>
         </label>
-        {hasContrast && (
+        {hasTask && (
           <div className="seg">
             <span>Mode</span>
             <button className={mode === "subject" ? "active" : ""} onClick={() => setMode("subject")}>
@@ -120,6 +148,16 @@ export function SignalView() {
               Cohort (EMD bands)
             </button>
           </div>
+        )}
+        {hasTask && (
+          <label>
+            Task
+            <select value={task} onChange={(e) => setTask(e.target.value)}>
+              {cat.tasks.map((t) => (
+                <option key={t} value={t}>{TASK_LABEL[t] ?? t}</option>
+              ))}
+            </select>
+          </label>
         )}
         {hasContrast && (
           <label>
@@ -139,7 +177,7 @@ export function SignalView() {
             ))}
           </select>
         </label>
-        {hasContrast && (
+        {hasTask && (
           <div className="seg">
             <span>Bands</span>
             <button className={scheme === "canonical" ? "active" : ""} onClick={() => setScheme("canonical")}>
@@ -196,6 +234,7 @@ export function SignalView() {
             <label>
               Subject
               <select value={subject} onChange={(e) => setSubject(e.target.value)}>
+                <option value={AVG_SUBJECT}>Average (all subjects)</option>
                 {cat.subjects.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -224,6 +263,7 @@ export function SignalView() {
             <label>
               Channel (region)
               <select value={channel} onChange={(e) => setChannel(Number(e.target.value))}>
+                <option value={-1}>{AVG_NAME}</option>
                 {names.map((n, i) => (
                   <option key={i} value={i}>{`${i}· ${n}`}</option>
                 ))}
@@ -246,7 +286,7 @@ export function SignalView() {
               caption="Empirical Mode Decomposition (emd.sift.sift) of the selected channel into Intrinsic Mode Functions — fast oscillations at the top down to the slow trend / residual at the bottom."
               wide
             />
-            {hasContrast && (
+            {hasTask && (
               <PlotPanel
                 kind="signal_bands"
                 title={`Band reconstruction · ${channelName}`}

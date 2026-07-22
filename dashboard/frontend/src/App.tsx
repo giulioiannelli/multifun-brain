@@ -25,7 +25,7 @@ export default function App() {
       .then((res) => {
         setDatasets(res.datasets);
         const preferred =
-          res.datasets.find((d) => d.id === "april/global") ??
+          res.datasets.find((d) => d.id === "schaefer100_april2026/global") ??
           res.datasets.find((d) => d.items.length > 0) ??
           res.datasets[0];
         if (preferred) {

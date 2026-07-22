@@ -12,12 +12,22 @@ import numpy as np
 
 from ..encode import clean
 
+# Label for the mean-over-regions pseudo-channel (channel index -1).
+AVG_NAME = "⟨mean over regions⟩"
+
 
 def _names_for(n: int, names: list[str]) -> list[str]:
     """Atlas short names if they line up with the row count, else generic labels."""
     if names and len(names) == n:
         return list(names)
     return [f"region-{i}" for i in range(n)]
+
+
+def _channel_name(ch: int, labels: list[str]) -> str:
+    """Resolve a channel index to its label; ``-1`` is the mean-over-regions signal."""
+    if ch < 0:
+        return AVG_NAME
+    return labels[ch] if ch < len(labels) else f"region-{ch}"
 
 
 def heatmap_spec(ts: np.ndarray, names: list[str], **_) -> dict:
@@ -40,19 +50,28 @@ def heatmap_spec(ts: np.ndarray, names: list[str], **_) -> dict:
 
 
 def channel_spec(ts: np.ndarray, names: list[str], channel: int = 0, **_) -> dict:
-    """Single-channel timecourse: value per timepoint for one region."""
+    """Single-channel timecourse: value per timepoint for one region.
+
+    ``channel = -1`` returns the mean timecourse over all regions (the global
+    average signal).
+    """
     ts = np.asarray(ts, dtype=float)
     n_regions, n_timepoints = ts.shape
-    ch = int(np.clip(channel, 0, n_regions - 1))
     labels = _names_for(n_regions, names)
+    if channel < 0:
+        ch = -1
+        y = ts.mean(axis=0)
+    else:
+        ch = int(np.clip(channel, 0, n_regions - 1))
+        y = ts[ch]
     return clean(
         {
             "kind": "signal_channel",
             "channel": ch,
-            "name": labels[ch],
+            "name": _channel_name(ch, labels),
             "n_regions": int(n_regions),
             "t": list(range(n_timepoints)),
-            "y": ts[ch],
+            "y": y,
         }
     )
 
@@ -114,8 +133,8 @@ def band_reconstruction_spec(recon: dict, names: list[str], **_) -> dict:
     signal = np.asarray(recon["signal"], dtype=float)
     n_t = signal.size
     ch = int(recon["channel"])
-    labels = _names_for(len(names) or ch + 1, names)
-    name = labels[ch] if ch < len(labels) else f"region-{ch}"
+    labels = _names_for(len(names) or max(ch + 1, 1), names)
+    name = _channel_name(ch, labels)
     freqs = np.asarray(recon["freqs"], dtype=float)
     bands = {b: list(rng) for b, rng in recon["bands"].items()}
     signals = {b: np.asarray(s, dtype=float) for b, s in recon["signals"].items()}
@@ -151,8 +170,8 @@ def emd_spec(sift: dict, names: list[str], **_) -> dict:
     residual = np.asarray(sift["residual"], dtype=float)
     ch = int(sift["channel"])
     n_t = signal.size
-    labels = _names_for(len(names) or ch + 1, names)
-    name = labels[ch] if ch < len(labels) else f"region-{ch}"
+    labels = _names_for(len(names) or max(ch + 1, 1), names)
+    name = _channel_name(ch, labels)
     return clean(
         {
             "kind": "signal_emd",
