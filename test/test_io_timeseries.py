@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import pytest
 
 from multifunbrain.io import (
     SAMPLING_INTERVAL_SECONDS,
     discover_timecourses,
+    load_acquisition_metadata,
     load_timecourses,
     parse_timecourse_filename,
     sampling_rate,
+    sampling_rate_for,
 )
 
 # A realistic AFNI hand-off filename (shortened body, real prefixes/suffixes).
@@ -150,3 +154,48 @@ def test_discover_kw_subject_from_parent_and_skips_discarded(tmp_path):
     assert {e.processing for e in found} == {"kwCBF4D", "kwfurN_Bold"}
     assert all(e.contrast is None and e.run is None for e in found)
     assert all(e.atlas == "harvardoxford48" for e in found)
+
+
+def _write_acq(tmp_path):
+    doc = {
+        "protocols": [
+            {"n_timepoints": 488, "tr_seconds": 0.98, "modality": "BOLD"},
+            {"n_timepoints": 444, "tr_seconds": 2.7, "modality": "VASO+BOLD"},
+            {"n_timepoints": 110, "tr_seconds": 5.5, "modality": "ASL/CBF"},
+        ]
+    }
+    (tmp_path / "acquisition.json").write_text(json.dumps(doc))
+
+
+def test_load_acquisition_metadata_keys_by_n(tmp_path):
+    _write_acq(tmp_path)
+    meta = load_acquisition_metadata(tmp_path)
+    assert set(meta) == {488, 444, 110}
+    assert meta[488]["tr_seconds"] == 0.98
+    assert meta[110]["modality"] == "ASL/CBF"
+
+
+def test_load_acquisition_metadata_absent_or_bad(tmp_path):
+    assert load_acquisition_metadata(tmp_path) == {}  # no file
+    (tmp_path / "acquisition.json").write_text("{ not json")
+    assert load_acquisition_metadata(tmp_path) == {}  # unparseable
+
+
+def test_sampling_rate_for_priority_order(tmp_path):
+    _write_acq(tmp_path)
+    # 1. resolved by N from acquisition.json (the kw discriminator)
+    assert sampling_rate_for(tmp_path, 488, None) == pytest.approx(1.0 / 0.98)
+    assert sampling_rate_for(tmp_path, 110, None) == pytest.approx(1.0 / 5.5)
+    # 2. fall back to the April per-variant map when N is unknown
+    assert sampling_rate_for(tmp_path, 999, "bpfBOLD") == pytest.approx(
+        1.0 / SAMPLING_INTERVAL_SECONDS["bpfBOLD"]
+    )
+    # 3. fall back to 1.0 (cycles/sample) when nothing matches
+    assert sampling_rate_for(tmp_path, 999, "unknown_variant") == 1.0
+    assert sampling_rate_for(None, None, None) == 1.0
+
+
+def test_sampling_rate_for_metadata_beats_variant_map(tmp_path):
+    _write_acq(tmp_path)
+    # N=488 in metadata (TR 0.98) wins over the variant map's bpfBOLD (TR 1.353).
+    assert sampling_rate_for(tmp_path, 488, "bpfBOLD") == pytest.approx(1.0 / 0.98)
