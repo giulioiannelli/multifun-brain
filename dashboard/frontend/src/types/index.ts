@@ -3,8 +3,9 @@
 export interface ResultItem {
   label: string;
   level: string | null;
-  contrast: string | null;
-  processing: string | null;
+  task: string | null; // experimental task: co2 / rest (kw sets: null)
+  contrast: string | null; // imaging modality: bold / vaso / cbf / noise
+  processing: string | null; // pipeline: clean / optcom / optcomMIRdenoised / bpf / raw / …
   band: string | null;
   subject: string | null;
   filters: string[];
