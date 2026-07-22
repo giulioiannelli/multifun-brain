@@ -20,6 +20,7 @@ from .kernel import graph_laplacian_and_spectrum, rho_matrix
 
 __all__ = [
     "compute_optimal_threshold",
+    "prepared_graph_laplacian_spectrum",
     "hierarchical_partitions_from_corr",
     "identify_switching_nodes",
     "get_moved_nodes",
@@ -72,6 +73,28 @@ def compute_optimal_threshold(linkage_matrix, scaling_factor=1):
     return FlatClusteringTh, optimal_threshold, stability_indices, optimal_branch_index
 
 
+def prepared_graph_laplacian_spectrum(
+    corr, edge_threshold: float = 0.0, normalized: bool = True
+):
+    """``(graph, L, spectrum)`` from a correlation / adjacency matrix.
+
+    The single prepare -> graph -> Laplacian chain the LRG hierarchy is built on:
+    ``prepare_correlation_matrix`` drops dead regions and zeroes the diagonal, an
+    optional ``edge_threshold`` sparsifies, then the (symmetric-normalised)
+    Laplacian and its ascending spectrum are returned. Shared so callers that need
+    only the spectrum — e.g. the dashboard's specific-heat ``C(tau)`` curve — get
+    exactly the same Laplacian as the clustering path, without duplicating steps.
+    """
+    cleaned = prepare_correlation_matrix(corr)
+    if edge_threshold > 0:
+        cleaned = np.where(cleaned >= edge_threshold, cleaned, 0.0)
+    graph = nx.from_numpy_array(cleaned)
+    L, spectrum = graph_laplacian_and_spectrum(
+        graph, weight="weight", normalized=normalized
+    )
+    return graph, L, spectrum
+
+
 def hierarchical_partitions_from_corr(
     corr,
     tau_values: Sequence[float],
@@ -98,13 +121,8 @@ def hierarchical_partitions_from_corr(
         ``'linkage_matrix'``, ``'linkage_labels'``, ``'tmax'``,
         ``'flat_threshold'``.
     """
-    cleaned = prepare_correlation_matrix(corr)
-    if edge_threshold > 0:
-        cleaned = np.where(cleaned >= edge_threshold, cleaned, 0.0)
-
-    graph = nx.from_numpy_array(cleaned)
-    L, _spectrum = graph_laplacian_and_spectrum(
-        graph, weight="weight", normalized=normalized_laplacian
+    graph, L, _spectrum = prepared_graph_laplacian_spectrum(
+        corr, edge_threshold=edge_threshold, normalized=normalized_laplacian
     )
 
     partitions: list[dict] = []

@@ -15,6 +15,7 @@ from . import descriptive, lrg, network
 
 PLOT_KINDS: dict[str, Callable] = {
     # descriptive (Section 1)
+    "region_names": descriptive.region_names_spec,
     "heatmap": descriptive.heatmap_spec,
     "partial_correlation": descriptive.partial_correlation_spec,
     "precision": descriptive.precision_spec,
@@ -30,6 +31,8 @@ PLOT_KINDS: dict[str, Callable] = {
     # LRG multiscale (Section 3), per filter
     "tau_grid": lrg.tau_grid_spec,
     "dendrogram": lrg.dendrogram_spec,
+    "specific_heat": lrg.specific_heat_spec,
+    "psi": lrg.psi_spec,
     "partition_flow": lrg.partition_flow_spec,
     "sankey": lrg.sankey_spec,
 }

@@ -21,6 +21,22 @@ def plot_kinds() -> dict:
     return {"kinds": sorted(PLOT_KINDS)}
 
 
+def _parse_exclude(exclude: str | None) -> list[int]:
+    """Parse a ``"3,7,12"`` exclusion list into ints (ignore junk / duplicates)."""
+    if not exclude:
+        return []
+    out: list[int] = []
+    for tok in exclude.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            out.append(int(tok))
+        except ValueError:
+            continue
+    return sorted(set(out))
+
+
 @router.get("/plot/{kind}")
 def plot(
     kind: str,
@@ -30,6 +46,11 @@ def plot(
     tau_index: int = Query(default=-1),
     edge_quantile: float = Query(default=0.9),
     cleaned: bool = Query(default=False),
+    sparsify: str | None = Query(default=None),
+    sparsify_alpha: float = Query(default=0.05),
+    sparsify_threshold: float = Query(default=0.3),
+    exclude: str | None = Query(default=None),
+    cut_height: float | None = Query(default=None),
 ) -> dict:
     """Serialise *kind* for the result identified by (*dataset*, *label*)."""
     serializer = PLOT_KINDS.get(kind)
@@ -49,4 +70,9 @@ def plot(
         tau_index=tau_index,
         edge_quantile=edge_quantile,
         cleaned=cleaned,
+        sparsify=sparsify,
+        sparsify_alpha=sparsify_alpha,
+        sparsify_threshold=sparsify_threshold,
+        exclude=_parse_exclude(exclude),
+        cut_height=cut_height,
     )

@@ -3,7 +3,9 @@
 // selector for the dendrogram.
 import { useEffect, useState } from "react";
 import { Brain3D } from "../components/plots/Brain3D";
+import { ChannelExcluder } from "../components/ChannelExcluder";
 import { PlotPanel } from "../components/PlotPanel";
+import { LrgView } from "./LrgView";
 import { usePlot } from "../hooks/usePlot";
 import type { QueryParams, ResultItem } from "../types";
 
@@ -35,33 +37,6 @@ function HistToggles({
   );
 }
 
-function TauSelector({
-  params,
-  value,
-  onChange,
-}: {
-  params: QueryParams;
-  value: number;
-  onChange: (i: number) => void;
-}) {
-  const { spec } = usePlot("tau_grid", params);
-  const taus: number[] = spec?.taus ?? [];
-  if (!taus.length) return null;
-  const idx = value < 0 ? taus.length + value : value;
-  return (
-    <label>
-      τ step
-      <select value={idx} onChange={(e) => onChange(Number(e.target.value))}>
-        {taus.map((t, i) => (
-          <option key={i} value={i}>
-            {t.toPrecision(3)} · {spec?.n_clusters?.[i]} cl
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
 export function ExploreView({
   tab,
   datasetId,
@@ -74,15 +49,26 @@ export function ExploreView({
   item: ResultItem | null;
 }) {
   const [filter, setFilter] = useState<string | null>(null);
-  const [tauIndex, setTauIndex] = useState<number>(-1);
   const [brainMode, setBrainMode] = useState<"connectome" | "markers">("connectome");
   const [edgeQuantile, setEdgeQuantile] = useState<number>(0.98);
+  const [brainNodeSize, setBrainNodeSize] = useState<number>(9);
   const [logScale, setLogScale] = useState<boolean>(false);
   const [specYLog, setSpecYLog] = useState<boolean>(true);
   const [specKde, setSpecKde] = useState<boolean>(true);
   const [wtYLog, setWtYLog] = useState<boolean>(false);
   const [wtKde, setWtKde] = useState<boolean>(true);
   const [cleaned, setCleaned] = useState<boolean>(false);
+  const [excluded, setExcluded] = useState<number[]>([]);
+  // Network graph controls (client-side except sparsify/edges, which refetch).
+  const [sparsify, setSparsify] = useState<string>("filter");
+  const [sparsifyAlpha, setSparsifyAlpha] = useState<number>(0.05);
+  const [sparsifyThreshold, setSparsifyThreshold] = useState<number>(0.3);
+  const [netEdgeQ, setNetEdgeQ] = useState<number>(0.9);
+  const [netLayout, setNetLayout] = useState<string>("spring");
+  const [netColorBy, setNetColorBy] = useState<string>("network");
+  const [netSizeBy, setNetSizeBy] = useState<string>("strength");
+  const [netNodeScale, setNetNodeScale] = useState<number>(1);
+  const [netEdgeScale, setNetEdgeScale] = useState<number>(1);
 
   const filters = item?.filters ?? [];
   useEffect(() => {
@@ -92,14 +78,47 @@ export function ExploreView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label, filters.join(",")]);
 
+  // Full region-name list for the channel-exclusion selector (result-specific).
+  const namesParams: QueryParams = { dataset: datasetId ?? "", label: label ?? "" };
+  const { spec: namesSpec } = usePlot("region_names", namesParams, {
+    enabled: tab === "Correlation" && !!datasetId && !!label,
+  });
+  const allNames: string[] = namesSpec?.names ?? [];
+  const allColors: string[] = namesSpec?.colors ?? [];
+  // Exclusion indices are result-specific; reset when the selection changes.
+  useEffect(() => {
+    setExcluded([]);
+  }, [datasetId, label]);
+
   if (!datasetId || !label) return <div className="hint">Select a result.</div>;
   if (item?.error) return <div className="plot-error">This result failed: {item.error}</div>;
 
   const base: QueryParams = { dataset: datasetId, label };
   const fparams: QueryParams = { ...base, filter: filter ?? undefined };
   // Descriptive plots can be served raw or MP-cleaned (refetched, hence a param).
-  const dparams: QueryParams = { ...base, cleaned: cleaned ? 1 : undefined };
-  const tag = cleaned ? " · MP-cleaned" : "";
+  const dparams: QueryParams = {
+    ...base,
+    cleaned: cleaned ? 1 : undefined,
+    exclude: excluded.length ? excluded.join(",") : undefined,
+  };
+  const tag =
+    (cleaned ? " · MP-cleaned" : "") +
+    (excluded.length ? ` · −${excluded.length} ch` : "");
+  // Network graph: sparsify/edge params refetch; layout/colour/size are render-only.
+  const netParams: QueryParams = {
+    ...fparams,
+    sparsify,
+    sparsify_alpha: sparsifyAlpha,
+    sparsify_threshold: sparsifyThreshold,
+    edge_quantile: netEdgeQ,
+  };
+  const netOptions = {
+    layout: netLayout,
+    colorBy: netColorBy,
+    sizeBy: netSizeBy,
+    nodeScale: netNodeScale,
+    edgeScale: netEdgeScale,
+  };
 
   return (
     <div className="explore">
@@ -113,9 +132,6 @@ export function ExploreView({
               ))}
             </select>
           </label>
-          {tab === "LRG" && (
-            <TauSelector params={fparams} value={tauIndex} onChange={setTauIndex} />
-          )}
           {tab === "Brain 3-D" && (
             <>
               <div className="seg">
@@ -147,6 +163,18 @@ export function ExploreView({
                   </select>
                 </label>
               )}
+              <label>
+                Node size
+                <select
+                  value={brainNodeSize}
+                  onChange={(e) => setBrainNodeSize(Number(e.target.value))}
+                >
+                  <option value={6}>S</option>
+                  <option value={9}>M</option>
+                  <option value={14}>L</option>
+                  <option value={20}>XL</option>
+                </select>
+              </label>
             </>
           )}
         </div>
@@ -172,6 +200,12 @@ export function ExploreView({
               MP-cleaned
             </button>
           </div>
+          <ChannelExcluder
+            names={allNames}
+            colors={allColors}
+            excluded={excluded}
+            onChange={setExcluded}
+          />
         </div>
       )}
 
@@ -223,12 +257,111 @@ export function ExploreView({
       )}
 
       {tab === "Network" && (
-        <div className="plot-grid">
-          <PlotPanel kind="global_metrics" title="Global metrics" params={fparams} />
-          <PlotPanel kind="degree_distribution" title="Degree distribution" params={fparams} />
-          <PlotPanel kind="network" title="Network graph" params={fparams} wide />
-          <PlotPanel kind="node_metrics" title="Node metrics" params={fparams} wide />
-        </div>
+        <>
+          <div className="subbar">
+            <label>
+              Sparsify
+              <select value={sparsify} onChange={(e) => setSparsify(e.target.value)}>
+                <option value="filter">As computed (filter)</option>
+                <option value="percolation">Percolation backbone</option>
+                <option value="disparity">Disparity filter</option>
+                <option value="threshold">|r| ≥ threshold</option>
+              </select>
+            </label>
+            {sparsify === "disparity" && (
+              <label>
+                α
+                <select value={sparsifyAlpha} onChange={(e) => setSparsifyAlpha(Number(e.target.value))}>
+                  <option value={0.01}>0.01</option>
+                  <option value={0.05}>0.05</option>
+                  <option value={0.1}>0.10</option>
+                  <option value={0.2}>0.20</option>
+                </select>
+              </label>
+            )}
+            {sparsify === "threshold" && (
+              <label>
+                |r| ≥
+                <select value={sparsifyThreshold} onChange={(e) => setSparsifyThreshold(Number(e.target.value))}>
+                  {[0.1, 0.2, 0.3, 0.4, 0.5, 0.6].map((v) => (
+                    <option key={v} value={v}>{v.toFixed(1)}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label>
+              Edges
+              <select value={netEdgeQ} onChange={(e) => setNetEdgeQ(Number(e.target.value))}>
+                <option value={0}>all</option>
+                <option value={0.5}>top 50%</option>
+                <option value={0.75}>top 25%</option>
+                <option value={0.9}>top 10%</option>
+                <option value={0.95}>top 5%</option>
+                <option value={0.98}>top 2%</option>
+              </select>
+            </label>
+            <label>
+              Layout
+              <select value={netLayout} onChange={(e) => setNetLayout(e.target.value)}>
+                <option value="spring">Spring (force)</option>
+                <option value="kamada">Kamada–Kawai</option>
+                <option value="spectral">Spectral</option>
+                <option value="cose">Force (CoSE)</option>
+                <option value="concentric">Concentric (by degree)</option>
+                <option value="circle">Circle</option>
+                <option value="grid">Grid</option>
+                <option value="breadthfirst">Breadth-first</option>
+              </select>
+            </label>
+            <label>
+              Colour
+              <select value={netColorBy} onChange={(e) => setNetColorBy(e.target.value)}>
+                <option value="network">Atlas network</option>
+                <option value="degree">Degree</option>
+                <option value="strength">Strength</option>
+              </select>
+            </label>
+            <label>
+              Size
+              <select value={netSizeBy} onChange={(e) => setNetSizeBy(e.target.value)}>
+                <option value="strength">Strength</option>
+                <option value="degree">Degree</option>
+                <option value="uniform">Uniform</option>
+              </select>
+            </label>
+            <label>
+              Node ×
+              <select value={netNodeScale} onChange={(e) => setNetNodeScale(Number(e.target.value))}>
+                <option value={0.6}>0.6</option>
+                <option value={1}>1.0</option>
+                <option value={1.6}>1.6</option>
+                <option value={2.4}>2.4</option>
+              </select>
+            </label>
+            <label>
+              Edge ×
+              <select value={netEdgeScale} onChange={(e) => setNetEdgeScale(Number(e.target.value))}>
+                <option value={0.5}>0.5</option>
+                <option value={1}>1.0</option>
+                <option value={2}>2.0</option>
+                <option value={3}>3.0</option>
+              </select>
+            </label>
+          </div>
+          <div className="plot-grid">
+            <PlotPanel kind="global_metrics" title="Global metrics" params={fparams} />
+            <PlotPanel kind="degree_distribution" title="Degree distribution" params={fparams} />
+            <PlotPanel
+              kind="network"
+              title="Network graph"
+              params={netParams}
+              figureOptions={netOptions}
+              caption="Interactive backbone. Sparsify re-derives the graph from the signed correlation (percolation / disparity / |r|-threshold); Edges then thins the drawn links by |weight|. Layout, colour, and size are view controls (no recompute). Global/degree/node metrics below reflect the pipeline's stored filter, not the ad-hoc sparsification."
+              wide
+            />
+            <PlotPanel kind="node_metrics" title="Node metrics" params={fparams} wide />
+          </div>
+        </>
       )}
 
       {tab === "Brain 3-D" && (
@@ -251,23 +384,13 @@ export function ExploreView({
               filter={filter}
               mode={brainMode}
               edgeQuantile={edgeQuantile}
+              nodeSize={brainNodeSize}
             />
           </section>
         </div>
       )}
 
-      {tab === "LRG" && (
-        <div className="plot-grid">
-          <PlotPanel
-            kind="dendrogram"
-            title="Dendrogram"
-            params={{ ...fparams, tau_index: tauIndex }}
-            wide
-          />
-          <PlotPanel kind="partition_flow" title="Partition flow" params={fparams} wide />
-          <PlotPanel kind="sankey" title="Community flow" params={fparams} wide />
-        </div>
-      )}
+      {tab === "LRG" && <LrgView dataset={datasetId} label={label} filter={filter} />}
     </div>
   );
 }

@@ -26,7 +26,9 @@ const FIGURE_BUILDERS: Record<string, Builder> = {
   signed_laplacian: F.buildSignedLaplacian,
   signed_balance: F.buildSignedBalance,
   degree_distribution: F.buildDegree,
-  dendrogram: F.buildDendrogram,
+  dendrogram: (s) => F.buildDendrogram(s), // interactive cut lives in LrgView; here: natural cut
+  specific_heat: F.buildSpecificHeat,
+  psi: F.buildPsi,
   partition_flow: F.buildPartitionFlow,
   sankey: F.buildSankey,
   // Signal tab (raw timecourses)
@@ -59,7 +61,7 @@ function PanelBody({
   if (kind === "network")
     return (
       <Suspense fallback={<div className="hint">Loading graph…</div>}>
-        <NetworkGraph spec={spec} />
+        <NetworkGraph spec={spec} options={figureOptions} />
       </Suspense>
     );
   if (kind === "global_metrics") return <GlobalMetrics spec={spec} />;

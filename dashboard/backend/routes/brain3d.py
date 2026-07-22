@@ -22,7 +22,8 @@ def brain3d_view(
     filter: str | None = Query(default=None),
     mode: str = Query(default="connectome"),
     edge_quantile: float = Query(default=0.98),
+    node_size: float = Query(default=9.0),
 ) -> HTMLResponse:
     """Interactive 3-D connectome / markers view for a filtered network."""
-    html = brain3d.render(dataset, label, filter, mode, edge_quantile)
+    html = brain3d.render(dataset, label, filter, mode, edge_quantile, node_size)
     return HTMLResponse(content=html)

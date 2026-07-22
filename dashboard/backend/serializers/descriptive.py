@@ -15,17 +15,41 @@ from ..encode import clean
 from ..remap import surviving_labels
 
 
-def _matrix_spec(result, matrix, kind: str, *, zmin: float, zmax: float) -> dict:
-    """Shared heatmap payload: matrix values + atlas node descriptors."""
+def _generic_nodes(n: int) -> list[dict]:
+    return [
+        {"index": i, "name": f"node-{i}", "short": f"node-{i}",
+         "hemisphere": "?", "network": "?", "color": "#888888"}
+        for i in range(n)
+    ]
+
+
+def region_names_spec(result, **_) -> dict:
+    """Just the surviving region labels (for the channel-exclusion selector)."""
+    nodes = surviving_labels(result)
+    return clean(
+        {
+            "kind": "region_names",
+            "label": result.label,
+            "n": len(nodes),
+            "names": [nd["short"] for nd in nodes],
+            "networks": [nd["network"] for nd in nodes],
+            "colors": [nd["color"] for nd in nodes],
+        }
+    )
+
+
+def _matrix_spec(result, matrix, kind: str, *, zmin: float, zmax: float, nodes=None) -> dict:
+    """Shared heatmap payload: matrix values + atlas node descriptors.
+
+    *nodes* overrides the atlas descriptors (used by the channel-exclusion path,
+    where rows/cols have been dropped so the labels no longer match the full set).
+    """
     matrix = np.asarray(matrix)
     n = int(matrix.shape[0])
-    nodes = surviving_labels(result)
+    if nodes is None:
+        nodes = surviving_labels(result)
     if len(nodes) != n:
-        nodes = [
-            {"index": i, "name": f"node-{i}", "short": f"node-{i}",
-             "hemisphere": "?", "network": "?", "color": "#888888"}
-            for i in range(n)
-        ]
+        nodes = _generic_nodes(n)
     return clean(
         {
             "kind": kind,
@@ -73,10 +97,63 @@ def _no_gamma(kind: str, result) -> dict:
     }
 
 
-def heatmap_spec(result, cleaned: bool = False, **_) -> dict:
-    """Prepared (signed) correlation matrix, optionally MP-cleaned."""
+def _working_matrices(result, cleaned: bool, exclude):
+    """Signed correlation (optionally MP-cleaned) with excluded channels dropped.
+
+    Returns ``(czero, cunit, nodes, gamma, sigma)`` — ``czero`` has a zeroed
+    diagonal (like ``corr_prepared``), ``cunit`` a unit diagonal (for inversion /
+    C-space spectra). *exclude* is a list of row/col indices into the current
+    (surviving) matrix to drop; ``gamma`` (p/n) is rescaled to the retained
+    channel count so the MP bulk stays meaningful. ``None`` if the source matrix
+    isn't available (MP-clean needs gamma; raw needs ``corr_prepared``).
+    """
+    if cleaned:
+        mc = _mp_cleaned(result)
+        if mc is None:
+            return None
+        czero = np.array(mc[0], dtype=float)
+        cunit = np.array(mc[1], dtype=float)
+        gamma, sigma = mc[2], mc[3]
+    else:
+        if result.corr_prepared is None:
+            return None
+        czero = np.array(result.corr_prepared, dtype=float)
+        cunit = czero.copy()
+        np.fill_diagonal(cunit, 1.0)
+        cfg = result.config
+        gamma = getattr(cfg, "gamma", None)
+        sigma = getattr(cfg, "sigma", 1.0) or 1.0
+
+    n = czero.shape[0]
+    nodes = surviving_labels(result)
+    if len(nodes) != n:
+        nodes = _generic_nodes(n)
+
+    drop = {int(i) for i in (exclude or []) if 0 <= int(i) < n}
+    if drop:
+        keep = [i for i in range(n) if i not in drop]
+        idx = np.array(keep, dtype=int)
+        czero = czero[np.ix_(idx, idx)]
+        cunit = cunit[np.ix_(idx, idx)]
+        nodes = [nodes[i] for i in keep]
+        if gamma is not None and n:
+            gamma = float(gamma) * (len(keep) / n)  # p/n scales with retained channels
+    return czero, cunit, nodes, float(gamma) if gamma is not None else None, float(sigma)
+
+
+def heatmap_spec(result, cleaned: bool = False, exclude=None, **_) -> dict:
+    """Prepared (signed) correlation matrix, optionally MP-cleaned / channel-dropped."""
     if result.corr_prepared is None:
         return {"kind": "heatmap", "label": result.label, "error": "no corr_prepared stored"}
+    if exclude:
+        wm = _working_matrices(result, cleaned, exclude)
+        if wm is None:
+            return _no_gamma("heatmap", result)
+        czero, _cunit, nodes, _g, _s = wm
+        spec = _matrix_spec(result, czero, "heatmap", zmin=-1.0, zmax=1.0, nodes=nodes)
+        spec["cleaned"] = bool(cleaned)
+        spec["excluded"] = list(exclude)
+        return spec
     if cleaned:
         mc = _mp_cleaned(result)
         if mc is None:
@@ -101,8 +178,26 @@ def partial_correlation_spec(result, **_) -> dict:
     return clean(spec)
 
 
-def precision_spec(result, cleaned: bool = False, **_) -> dict:
+def precision_spec(result, cleaned: bool = False, exclude=None, **_) -> dict:
     """Precision matrix (inverse correlation). Cleaned = inverse of MP-cleaned C."""
+    if exclude:
+        wm = _working_matrices(result, cleaned, exclude)
+        if wm is None:
+            return _no_gamma("precision", result)
+        _czero, cunit, nodes, _g, _s = wm
+        try:
+            mat = np.linalg.inv(cunit)
+        except np.linalg.LinAlgError:
+            mat = np.linalg.pinv(cunit)
+        mat = np.asarray(mat, dtype=float)
+        np.fill_diagonal(mat, 0.0)
+        bound = float(np.nanmax(np.abs(mat))) or 1.0
+        spec = _matrix_spec(result, mat, "precision", zmin=-bound, zmax=bound, nodes=nodes)
+        spec["method"] = ("inverse of MP-cleaned correlation" if cleaned
+                          else "inverse of correlation") + " (excluded channels dropped)"
+        spec["cleaned"] = bool(cleaned)
+        spec["excluded"] = list(exclude)
+        return clean(spec)
     if cleaned:
         mc = _mp_cleaned(result)
         if mc is None:
@@ -183,8 +278,20 @@ def _weights_payload(result, weights, counts, edges) -> dict:
     }
 
 
-def weights_spec(result, cleaned: bool = False, **_) -> dict:
+def weights_spec(result, cleaned: bool = False, exclude=None, **_) -> dict:
     """Weight-distribution histogram (signed) + KDE overlay, optionally MP-cleaned."""
+    if exclude:
+        wm = _working_matrices(result, cleaned, exclude)
+        if wm is None:
+            return _no_gamma("weights", result)
+        czero, _cunit, _nodes, _g, _s = wm
+        w = czero[np.triu_indices_from(czero, k=1)]
+        w = w[np.isfinite(w)]
+        counts, edges = np.histogram(w, bins=100)
+        payload = _weights_payload(result, w, counts, edges)
+        payload["cleaned"] = bool(cleaned)
+        payload["excluded"] = list(exclude)
+        return clean(payload)
     if cleaned:
         mc = _mp_cleaned(result)
         if mc is None:
@@ -267,6 +374,50 @@ def spectrum_spec(result, cleaned: bool = False, **_) -> dict:
     correlation space (``eig + 1``) with the theoretical MP density overlaid and
     the noise bulk ``[λ-, λ+]`` (the part the cleaning flattens) shaded.
     """
+    exclude = _.get("exclude") if _ else None
+    if exclude:
+        # Recompute the spectrum on the channel-dropped submatrix. Eigenvalues use
+        # the raw submatrix (the same source as the non-excluded views); `cleaned`
+        # only switches the overlay to unit-diagonal C-space + MP bulk shading.
+        wm = _working_matrices(result, False, exclude)
+        if wm is None:
+            return {"kind": "spectrum", "label": result.label, "error": "no corr_prepared stored"}
+        czero, cunit, _nodes, gamma, sigma = wm
+        if cleaned and gamma is None:
+            return _no_gamma("spectrum", result)
+        mu = np.linalg.eigvalsh(cunit if cleaned else czero)
+        hist = _adaptive_spectrum_hist(mu)
+        out = {
+            "kind": "spectrum", "label": result.label,
+            "eigenvalues": mu, "counts": hist["counts"], "edges": hist["edges"],
+            "kde_x": None, "kde_y": None,
+            "n_above": hist["n_above"], "above": hist["above"],
+            "cleaned": bool(cleaned), "excluded": list(exclude),
+        }
+        if gamma is not None:
+            g = min(gamma, 1.0)
+            lam_minus = sigma * (1 - np.sqrt(g)) ** 2
+            lam_plus = sigma * (1 + np.sqrt(g)) ** 2
+            out["mp_lambda_minus"] = lam_minus
+            out["mp_lambda_plus"] = lam_plus
+            if cleaned:
+                out["bulk_lo"], out["bulk_hi"] = lam_minus, lam_plus
+                out["n_noise"] = int(((mu >= lam_minus) & (mu <= lam_plus)).sum())
+                out["n_signal"] = int((mu > lam_plus).sum())
+                if hist["edges"] is not None and hist["counts"] is not None and len(hist["counts"]):
+                    from multifunbrain.preprocessing.denoising import (
+                        marchenko_pastur_density,
+                    )
+
+                    e = np.asarray(hist["edges"], dtype=float)
+                    binwidth = (float(e[-1]) - float(e[0])) / len(hist["counts"])
+                    grid = np.linspace(lam_minus, lam_plus, 200)
+                    out["mp_curve_x"] = grid
+                    out["mp_curve_y"] = (
+                        marchenko_pastur_density(grid, gamma=gamma, sigma=sigma) * (mu.size * binwidth)
+                    )
+        return clean(out)
+
     sp = (result.descriptive or {}).get("spectrum") or {}
     raw_eigs = sp.get("eigenvalues")
 
