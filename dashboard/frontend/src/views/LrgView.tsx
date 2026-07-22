@@ -9,7 +9,9 @@
 // communities evolve across τ.
 import { useEffect, useMemo, useState } from "react";
 import { PlotPanel } from "../components/PlotPanel";
-import { buildDendrogram, buildPsi, buildSpecificHeat, colorDendrogram } from "../components/plots/figures";
+import { buildDendrogram, buildPsi, buildSpecificHeat, clusterLeaves, colorDendrogram } from "../components/plots/figures";
+import { LrgBrain } from "../components/plots/LrgBrain";
+import { NetworkGraph } from "../components/plots/NetworkGraph";
 import { PlotlyFigure } from "../components/plots/PlotlyFigure";
 import { usePlot } from "../hooks/usePlot";
 import type { QueryParams } from "../types";
@@ -18,12 +20,24 @@ export function LrgView({
   dataset,
   label,
   filter,
+  sparsify = "filter",
+  sparsifyAlpha = 0.05,
+  sparsifyThreshold = 0.3,
 }: {
   dataset: string;
   label: string;
   filter: string | null;
+  sparsify?: string;
+  sparsifyAlpha?: number;
+  sparsifyThreshold?: number;
 }) {
-  const base: QueryParams = { dataset, label, filter: filter ?? undefined };
+  // Sparsify params flow into every LRG fetch so the whole tab honours the
+  // Network-tab backbone selection (feature: sparsification propagation).
+  const sparsifyParams: QueryParams =
+    sparsify && sparsify !== "filter"
+      ? { sparsify, sparsify_alpha: sparsifyAlpha, sparsify_threshold: sparsifyThreshold }
+      : {};
+  const base: QueryParams = { dataset, label, filter: filter ?? undefined, ...sparsifyParams };
 
   const { spec: grid } = usePlot("tau_grid", base);
   const taus: number[] = grid?.taus ?? [];
@@ -35,11 +49,11 @@ export function LrgView({
 
   const idx = nTau ? (tauIndex < 0 ? nTau - 1 : Math.min(tauIndex, nTau - 1)) : 0;
 
-  // Reset both sliders when the selected result changes.
+  // Reset both sliders when the selected result (or sparsification) changes.
   useEffect(() => {
     setTauIndex(-1);
     setCutHeight(null);
-  }, [dataset, label, filter]);
+  }, [dataset, label, filter, sparsify, sparsifyAlpha, sparsifyThreshold]);
   // A new τ has its own dendrogram; fall back to its natural cut.
   useEffect(() => {
     setCutHeight(null);
@@ -51,6 +65,13 @@ export function LrgView({
   const { spec: dendro, loading: dLoading } = usePlot("dendrogram", dparams, { enabled: nTau > 0 });
   const { spec: psi } = usePlot("psi", dparams, { enabled: nTau > 0 });
   const { spec: cheat } = usePlot("specific_heat", base, { enabled: nTau > 0 });
+  // Clustered-network layout is τ-dependent (MDS embedding), not cut-dependent —
+  // dragging the cut only recolours it client-side (communityColors below).
+  // edge_quantile=0 draws the full backbone (the MDS layout, not edge thinning,
+  // conveys the communities); otherwise the /plot route's 0.9 default would drop
+  // ~90% of edges. Sparsify (in `base`) already controls backbone density.
+  const netParams: QueryParams = { ...dparams, edge_quantile: 0 };
+  const { spec: lrgNet, loading: netLoading } = usePlot("lrg_network", netParams, { enabled: nTau > 0 });
 
   const dmin: number | null = dendro?.dcoord_min_positive ?? null;
   const dmax: number | null = dendro?.dcoord_max ?? null;
@@ -81,6 +102,21 @@ export function LrgView({
   );
   const psiFig = useMemo(() => (psi && !psi.error ? buildPsi(psi) : null), [psi]);
   const psiOptimal: number | null = psi?.optimal_threshold ?? null;
+
+  // Per-node community colours at the live cut — same union-find the dendrogram
+  // uses, so the clustered network + dendrogram share one colouring, and dragging
+  // the cut recolours the network instantly (no refetch).
+  const communityColors = useMemo(
+    () =>
+      dendro && !dendro.error && cutUsed != null
+        ? clusterLeaves(dendro, cutUsed).colors
+        : undefined,
+    [dendro, cutUsed],
+  );
+  const netOptions = useMemo(
+    () => ({ layout: "lrg", colorBy: "community", communityColors, sizeBy: "strength", edgeScaleMode: "sqrt", edgeColorBy: "uniform" }),
+    [communityColors],
+  );
 
   return (
     <div className="explore">
@@ -155,6 +191,55 @@ export function LrgView({
             <div className="plot-error">{dendro.error}</div>
           ) : dendroFig ? (
             <PlotlyFigure data={dendroFig.data} layout={dendroFig.layout} height={dendroFig.layout.height ?? 520} />
+          ) : (
+            <div className="hint">{dLoading ? "Loading…" : "…"}</div>
+          )}
+        </section>
+
+        <section className="plot-card wide">
+          <div className="plot-head">
+            <h3>Clustered network · LRG layout</h3>
+          </div>
+          <p className="plot-caption">
+            Nodes placed by an MDS embedding of the LRG diffusion distance at this τ (communities
+            sit together — not a generic spring layout), coloured by the <b>same cut</b> as the
+            dendrogram. Drag <b>cut h</b> to recolour both in lock-step; only τ recomputes the layout.
+          </p>
+          {!nTau ? (
+            <div className="hint">No LRG partitions for this result.</div>
+          ) : lrgNet?.error ? (
+            <div className="plot-error">{lrgNet.error}</div>
+          ) : lrgNet && lrgNet.nodes ? (
+            <NetworkGraph spec={lrgNet} options={netOptions} />
+          ) : (
+            <div className="hint">{netLoading ? "Loading…" : "…"}</div>
+          )}
+        </section>
+
+        <section className="plot-card wide">
+          <div className="plot-head">
+            <h3>Brain partition · glass brain</h3>
+          </div>
+          <p className="plot-caption">
+            The partition at this τ / cut reprojected into brain space — each parcel's survivor
+            centroid coloured by its community (colours match the dendrogram and clustered network).
+            Drag to rotate, scroll to zoom. Unavailable for atlases without Schaefer centroids.
+          </p>
+          {!nTau ? (
+            <div className="hint">No LRG partitions for this result.</div>
+          ) : dendro && !dendro.error && cutUsed != null ? (
+            // Mount only once τ + cut have settled, so the slow nilearn iframe
+            // never gets stuck showing an intermediate (pre-grid) partition.
+            <LrgBrain
+              dataset={dataset}
+              label={label}
+              filter={filter}
+              tauIndex={idx}
+              cutHeight={cutUsed}
+              sparsify={sparsify}
+              sparsifyAlpha={sparsifyAlpha}
+              sparsifyThreshold={sparsifyThreshold}
+            />
           ) : (
             <div className="hint">{dLoading ? "Loading…" : "…"}</div>
           )}
