@@ -30,6 +30,8 @@ export const api = {
     getJSON<SignalCatalog>("/signal/catalog", dataset ? { dataset } : undefined),
   signal: (kind: string, params: QueryParams) =>
     getJSON<PlotSpec>(`/signal/${kind}`, params),
+  // Two-selection hierarchy comparison (Compare tab).
+  compare: (params: QueryParams) => getJSON<PlotSpec>("/compare", params),
 };
 
 // The plot fetchers share a (kind, params) -> spec shape so usePlot can pick one.
