@@ -20,6 +20,7 @@ import networkx as nx
 
 from . import remap
 from .catalog import dataset_dir
+from .graphs import derive_graph
 from .loaders import get_results
 from .remap import surviving_labels
 from .serializers.network import resolve_filter
@@ -33,11 +34,13 @@ def _error_page(message: str) -> str:
 
 
 def _build_html(
-    result, fname: str, mode: str, edge_quantile: float, node_size: float
+    result, fname: str, mode: str, edge_quantile: float, node_size: float,
+    sparsify: str | None = None, sparsify_alpha: float = 0.05,
+    sparsify_threshold: float = 0.3,
 ) -> str:
     from nilearn import plotting
 
-    graph: nx.Graph = result.filtered_networks[fname]["graph"]
+    graph, _eff = derive_graph(result, fname, sparsify, sparsify_alpha, sparsify_threshold)
     ids = sorted(int(x) for x in graph.nodes())
     if not ids:
         return _error_page("This network has no nodes to display.")
@@ -74,10 +77,14 @@ def _build_html(
 @lru_cache(maxsize=64)
 def _html_cached(
     dataset: str, label: str, fname: str, mode: str, edge_quantile: float,
-    node_size: float, _mtime: float,
+    node_size: float, sparsify: str, sparsify_alpha: float,
+    sparsify_threshold: float, _mtime: float,
 ) -> str:
     rc = get_results(dataset_dir(dataset))
-    return _build_html(rc[label], fname, mode, edge_quantile, node_size)
+    return _build_html(
+        rc[label], fname, mode, edge_quantile, node_size,
+        None if sparsify == "filter" else sparsify, sparsify_alpha, sparsify_threshold,
+    )
 
 
 def render(
@@ -87,6 +94,9 @@ def render(
     mode: str = "connectome",
     edge_quantile: float = 0.98,
     node_size: float = 9.0,
+    sparsify: str | None = None,
+    sparsify_alpha: float = 0.05,
+    sparsify_threshold: float = 0.3,
 ) -> str:
     """Standalone HTML for the 3-D brain, or a small HTML error page."""
     directory = dataset_dir(dataset)
@@ -104,5 +114,6 @@ def render(
     mtime = (directory / "results.pkl").stat().st_mtime
     return _html_cached(
         dataset, label, fname, mode, round(float(edge_quantile), 3),
-        round(float(node_size), 1), mtime,
+        round(float(node_size), 1), sparsify or "filter",
+        round(float(sparsify_alpha), 4), round(float(sparsify_threshold), 4), mtime,
     )

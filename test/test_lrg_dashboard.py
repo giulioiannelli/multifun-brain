@@ -12,8 +12,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from dashboard.backend import config
 from dashboard.backend.serializers import lrg
 from multifunbrain import PipelineConfig, run_pipeline
+
+# Serializers that label nodes need the Schaefer atlas order file, which ships
+# with the gitignored data (present in CI, absent in a bare worktree).
+_needs_atlas = pytest.mark.skipif(
+    not config.ATLAS_ORDER_FILE.exists(), reason="atlas order file unavailable"
+)
 
 
 @pytest.fixture(scope="module")
@@ -45,6 +52,32 @@ def test_specific_heat_spec(result):
     assert spec["tau_prime"] and spec["tau_prime"] > 0
 
 
+@_needs_atlas
+def test_lrg_network_spec(result):
+    fname = _filter(result)
+    spec = lrg.lrg_network_spec(result, filter_name=fname, tau_index=-1)
+    assert not spec.get("error"), spec
+    assert spec["kind"] == "lrg_network"
+    nodes, edges = spec["nodes"], spec["edges"]
+    assert len(nodes) == spec["n_leaves"]
+    # Nodes are the linkage leaves 0..n-1 (so the client colours by the cut).
+    assert [n["id"] for n in nodes] == [str(i) for i in range(spec["n_leaves"])]
+    # MDS layout: every node has finite 2-D coordinates.
+    assert all(np.isfinite(n["x"]) and np.isfinite(n["y"]) for n in nodes)
+    # Edge endpoints reference node indices.
+    ids = {n["id"] for n in nodes}
+    assert all(e["source"] in ids and e["target"] in ids for e in edges)
+
+
+@_needs_atlas
+def test_lrg_network_honours_sparsify(result):
+    fname = _filter(result)
+    spec = lrg.lrg_network_spec(result, filter_name=fname, tau_index=-1, sparsify="lans")
+    assert not spec.get("error"), spec
+    assert spec["sparsify"] == "lans"
+    assert len(spec["nodes"]) == spec["n_leaves"] >= 3
+
+
 def test_psi_spec(result):
     spec = lrg.psi_spec(result, filter_name=_filter(result), tau_index=-1)
     assert not spec.get("error"), spec
@@ -56,6 +89,7 @@ def test_psi_spec(result):
     assert spec["optimal_psi"] == pytest.approx(max(spec["psi"]))
 
 
+@_needs_atlas
 def test_dendrogram_client_side_colouring_contract(result):
     spec = lrg.dendrogram_spec(result, filter_name=_filter(result), tau_index=-1)
     assert not spec.get("error"), spec
