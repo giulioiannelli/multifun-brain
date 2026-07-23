@@ -270,6 +270,14 @@ body {
   background: #fff;
 }
 
+/* LRG glass brain: square + capped to match the clustered-network canvas, so the
+   two sit side by side at ~1:1 and are visible together (not stacked). */
+.brain3d-frame.lrg-brain-frame {
+  height: auto;
+  aspect-ratio: 1 / 1;
+  max-width: 720px;
+}
+
 .hint {
   color: var(--muted);
   padding: 24px;

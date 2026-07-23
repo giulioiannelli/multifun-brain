@@ -99,9 +99,13 @@ def cohort_bands_spec(cohort: dict, **_) -> dict:
     nbins = max(8, math.ceil(math.log2(freqs.size) + 30))
     hi = max(0.2, float(np.percentile(freqs, 99.7)), bands["sstar"][1])
     counts, edges = np.histogram(freqs, bins=nbins, range=(0.0, hi))
-    # Period (s) histogram — the notebook's companion panel.
+    # Period (s) histogram — the notebook's companion panel. Bound the axis by the
+    # slowest band edge (Slow-5 low), NOT a percentile of 1/f: near-DC drift IMFs
+    # (f→0) blow up any period percentile to ~1e17 s, collapsing every real period
+    # into the first bin (the "one bar" bug). 1.5x the Slow-5 period leaves a little
+    # headroom above the slowest oscillation of interest.
     periods = 1.0 / freqs
-    p_hi = max(float(np.percentile(periods, 99.0)), 1.0 / bands["s5"][0])
+    p_hi = 1.5 / bands["s5"][0]
     p_counts, p_edges = np.histogram(periods, bins=nbins, range=(0.0, p_hi))
     centers = {int(k): float(v) for k, v in scheme.centers.items()}
     # IMFs per index that contributed (cluster sizes), for hover/context.

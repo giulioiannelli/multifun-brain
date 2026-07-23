@@ -42,7 +42,7 @@ export function LrgBrain({
   return (
     <iframe
       key={src}
-      className="brain3d-frame"
+      className="brain3d-frame lrg-brain-frame"
       src={src}
       title="LRG partition brain"
       loading="lazy"

@@ -18,6 +18,19 @@ const TASK_LABEL: Record<string, string> = { co2: "CO₂", rest: "rest" };
 const CONTRAST_LABEL: Record<string, string> = {
   bold: "BOLD", vaso: "VASO", cbf: "CBF",
 };
+// Processing display order (matches the result-tab SelectorBar's PROC_ORDER).
+const PROC_ORDER = [
+  "raw", "bpf", "optcom", "optcomMIRdenoised", "clean",
+  "furN", "fcurN", "MNI152", "MIRnoise",
+];
+const orderProc = (vals: string[]): string[] =>
+  [...vals].sort((a, b) => {
+    const ia = PROC_ORDER.indexOf(a), ib = PROC_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
 // Sentinel subject: the cross-subject mean timecourse (kept in sync with the
 // backend timeseries.AVG_SUBJECT). Carpet / channel / EMD / bands all honour it.
 const AVG_SUBJECT = "__avg__";
@@ -93,6 +106,23 @@ export function SignalView() {
     return e?.token ?? "";
   }, [cat, task, contrast, processing]);
 
+  // Cascading options: Contrast lists only the modalities present for the chosen
+  // Task; Processing only the pipelines present for the chosen (Task, Contrast).
+  // So VASO stops offering BOLD-only processings — impossible combinations are
+  // never selectable. The fallback effect above re-snaps the current selection
+  // whenever an upstream facet narrows the list.
+  const contrastOpts = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of cat?.entries ?? []) if ((e.task ?? "") === task && e.contrast) s.add(e.contrast);
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [cat, task]);
+  const procOpts = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of cat?.entries ?? [])
+      if ((e.task ?? "") === task && (e.contrast ?? "") === contrast) s.add(e.processing);
+    return orderProc([...s]);
+  }, [cat, task, contrast]);
+
   const names = cat?.region_names ?? [];
   const AVG_NAME = "⟨mean over regions⟩";
   const channelName = channel < 0 ? AVG_NAME : (names[channel] ?? `region ${channel}`);
@@ -163,7 +193,7 @@ export function SignalView() {
           <label>
             Contrast
             <select value={contrast} onChange={(e) => setContrast(e.target.value)}>
-              {cat.contrasts.map((c) => (
+              {contrastOpts.map((c) => (
                 <option key={c} value={c}>{CONTRAST_LABEL[c] ?? c}</option>
               ))}
             </select>
@@ -172,7 +202,7 @@ export function SignalView() {
         <label>
           Processing
           <select value={processing} onChange={(e) => setProcessing(e.target.value)}>
-            {cat.processings.map((p) => (
+            {procOpts.map((p) => (
               <option key={p} value={p}>{p}</option>
             ))}
           </select>

@@ -669,14 +669,17 @@ export function buildSignalHeatmap(
     data: [trace],
     layout: {
       title: { text: `timecourses · ${spec.n_regions ?? names.length} regions × ${spec.n_timepoints ?? "?"} timepoints` },
-      height: 560,
+      // Taller when there are more regions so each row has room for a legible
+      // tick label; automargin lets Plotly widen the left gutter to fit names.
+      height: Math.min(1100, Math.max(520, (spec.n_regions ?? names.length) * 12)),
       xaxis: { title: { text: "timepoint" } },
       yaxis: {
         autorange: "reversed",
-        tickfont: { size: 6 },
+        tickfont: { size: 10 },
         showticklabels: showTicks,
+        automargin: true,
       },
-      margin: { l: 90, r: 20, t: 44, b: 44 },
+      margin: { l: 120, r: 20, t: 44, b: 44 },
     },
   };
 }

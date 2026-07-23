@@ -196,7 +196,7 @@ export function LrgView({
           )}
         </section>
 
-        <section className="plot-card wide">
+        <section className="plot-card">
           <div className="plot-head">
             <h3>Clustered network · LRG layout</h3>
           </div>
@@ -216,7 +216,7 @@ export function LrgView({
           )}
         </section>
 
-        <section className="plot-card wide">
+        <section className="plot-card">
           <div className="plot-head">
             <h3>Brain partition · glass brain</h3>
           </div>
