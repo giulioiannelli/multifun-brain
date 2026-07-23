@@ -4,15 +4,21 @@ This is the full walk-through, **from cloning the repo to seeing the dashboard i
 your browser**. It is identical on Windows, macOS and Linux — every command below
 is cross-platform.
 
-The whole thing is **one command after setup**:
+> ### As a collaborator, you only ever do three things
+> 1. **Create the environment** once (`conda env create …` — brings Python + Node).
+> 2. **Drop the shared data folder** at `./data` (the one thing you do by hand).
+> 3. **Run `python quickstart.py`** — it does *everything else* and opens the browser.
+>
+> You never touch the cache, build the UI, or run any analysis by hand. The script
+> looks at `./data`, figures out what's there, and fills in whatever's missing.
 
-```bash
-python quickstart.py
-```
-
-That single script installs the dependencies, **auto-detects your data folder**
-(atlas, subjects, processing variants), **computes and caches** any results that
-aren't there yet, builds the interface, and opens the dashboard in your browser.
+**About the cache (the part people ask about):** the result tabs read
+*pre-computed* bundles. If the shared folder already contains them, quickstart goes
+straight to opening the dashboard. If it has **only raw timecourses**, quickstart
+**computes those bundles once and caches them** under
+`data/correlation_matrices_results/` — the only slow step, and it never runs again.
+So the **first** `python quickstart.py` may take a while; **every run after is
+instant**. There is nothing to clear, warm, or manage yourself.
 
 ---
 

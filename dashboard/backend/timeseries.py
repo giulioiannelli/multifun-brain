@@ -245,6 +245,59 @@ def get_timecourses(
     return _safe_load(path)
 
 
+@lru_cache(maxsize=16)
+def _band_carpet_cached(
+    root_str: str, subject: str, contrast: str, processing: str, band: str, _mtime: float
+) -> np.ndarray | None:
+    """``(n_regions, n_timepoints)`` carpet where each region is its band signal.
+
+    Every ROI is EMD-sifted and its IMFs in *band* are summed (the canonical
+    slow-oscillation edges). EMD over all ROIs is the expensive step (~0.5 s per
+    subject for 48–100 ROIs), so the result is memoised. ``band`` is one of the
+    canonical bands (``s5`` / ``s4`` / ``sstar``); the broadband carpet uses the
+    raw array (:func:`get_timecourses`), not this path.
+    """
+    from multifunbrain.analysis.emd_bands import (
+        canonical_scheme,
+        reconstruct_bands,
+        sift_with_frequencies,
+    )
+
+    root = Path(root_str)
+    if subject == AVG_SUBJECT:
+        ts = _avg_array_cached(root_str, contrast, processing, _mtime)
+    else:
+        path = _resolve(root, subject, contrast, processing)
+        ts = _safe_load(path) if path else None
+    if ts is None:
+        return None
+    bands = canonical_scheme().bands
+    if band not in bands:
+        return None
+    fs = sampling_rate_for(root_str, ts.shape[1], processing)
+    rows: list[np.ndarray] = []
+    for roi in ts:
+        imfs, freqs = sift_with_frequencies(np.asarray(roi, dtype=float), fs)
+        signals, _ = reconstruct_bands(imfs, freqs, bands)
+        rows.append(np.asarray(signals[band], dtype=float))
+    return np.stack(rows, axis=0)
+
+
+def band_carpet(
+    dataset: str | None, subject: str, contrast: str, processing: str, band: str
+) -> np.ndarray | None:
+    """Band-reconstructed carpet (each region = its IMFs summed within *band*).
+
+    Uses canonical band edges. A missing/``"full"`` band isn't served here — the
+    route falls back to :func:`get_timecourses` for the broadband carpet.
+    ``subject = AVG_SUBJECT`` band-reconstructs the cross-subject mean carpet.
+    """
+    root = _root_for(dataset)
+    return _band_carpet_cached(
+        str(root), subject, contrast or "", processing, band, _mtime(root)
+    )
+
+
 def _sift_signal(ts: np.ndarray, channel: int, sample_rate: float) -> dict:
     """Full EMD sift of one channel of *ts* (all IMFs) + per-IMF characteristic freqs.
 
@@ -371,20 +424,24 @@ def sift_channel(
     }
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=32)
 def _cohort_pool_cached(
-    root_str: str, contrast: str, processing: str, _mtime: float
+    root_str: str, contrast: str, processing: str, subject: str, _mtime: float
 ) -> dict:
     """Pool every IMF's characteristic frequency (Hz) across the cohort.
 
     Runs EMD over every ROI of every subject for ``(contrast, processing)`` —
     expensive (~3 s for 6 subjects × 100 ROIs), hence cached. Scheme-independent.
+    A non-empty *subject* restricts the pool to that one subject (per-subject
+    spectrum); ``""`` pools the whole cohort.
     """
     from multifunbrain.analysis.emd_bands import sift_with_frequencies
 
     files = discover_timecourses(
         Path(root_str), contrasts=[contrast], processings=[processing]
     )
+    if subject:
+        files = [f for f in files if f.subject == subject]
     fs = sampling_rate_for(root_str, None, processing)  # representative; refined per file below
     per_index: dict[int, list[float]] = {}
     all_freqs: list[float] = []
@@ -402,6 +459,7 @@ def _cohort_pool_cached(
     return {
         "contrast": contrast,
         "processing": processing,
+        "subject": subject or None,
         "sample_rate": fs,
         "n_subjects": len(files),
         "all_freqs": np.asarray(all_freqs, dtype=float),
@@ -436,18 +494,26 @@ def _scheme_for(pool: dict, scheme: str):
 
 
 def cohort_bands(
-    dataset: str | None, contrast: str, processing: str, scheme: str = "canonical"
+    dataset: str | None,
+    contrast: str,
+    processing: str,
+    scheme: str = "canonical",
+    subject: str = "",
 ) -> dict | None:
     """Cohort IMF-frequency pooling (Hz) + the chosen band scheme, or ``None``.
 
     ``scheme`` is ``"canonical"`` (fixed slow-oscillation edges, default) or
     ``"data_driven"``. The pooled histogram is identical for both — only the band
-    overlay/assignment differs.
+    overlay/assignment differs. A non-empty *subject* pools only that subject's
+    ROIs (per-subject spectrum); ``""`` pools the whole cohort.
     """
     root = _root_for(dataset)
-    if not discover_timecourses(root, contrasts=[contrast], processings=[processing]):
+    files = discover_timecourses(root, contrasts=[contrast], processings=[processing])
+    if subject:
+        files = [f for f in files if f.subject == subject]
+    if not files:
         return None
-    pool = _cohort_pool_cached(str(root), contrast, processing, _mtime(root))
+    pool = _cohort_pool_cached(str(root), contrast, processing, subject or "", _mtime(root))
     return {**pool, "scheme": _scheme_for(pool, scheme), "scheme_name": scheme}
 
 

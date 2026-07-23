@@ -34,6 +34,14 @@ const orderProc = (vals: string[]): string[] =>
 // Sentinel subject: the cross-subject mean timecourse (kept in sync with the
 // backend timeseries.AVG_SUBJECT). Carpet / channel / EMD / bands all honour it.
 const AVG_SUBJECT = "__avg__";
+// Carpet band selector: broadband, or a canonical band whose per-region signal is
+// the sum of that region's IMFs in the band (backend timeseries.band_carpet).
+const CARPET_BANDS: { value: string; label: string }[] = [
+  { value: "full", label: "Broadband" },
+  { value: "s5", label: "Slow-5" },
+  { value: "s4", label: "Slow-4" },
+  { value: "sstar", label: "S*" },
+];
 type Mode = "subject" | "cohort";
 
 export function SignalView() {
@@ -48,6 +56,8 @@ export function SignalView() {
   const [processing, setProcessing] = useState<string>(""); // pipeline label
   const [channel, setChannel] = useState<number>(0);
   const [normalize, setNormalize] = useState<boolean>(true);
+  const [carpetBand, setCarpetBand] = useState<string>("full"); // carpet band selector
+  const [cohortSubject, setCohortSubject] = useState<string>(""); // "" = whole cohort
   const [bandsYLog, setBandsYLog] = useState<boolean>(false);
   const [scheme, setScheme] = useState<"canonical" | "data_driven">("canonical");
 
@@ -68,6 +78,8 @@ export function SignalView() {
           setProcessing(first.processing);
         }
         setChannel(0);
+        setCarpetBand("full");
+        setCohortSubject(""); // subject ids are dataset-specific; back to whole cohort
       })
       .catch((e) => !cancelled && setError(String(e)));
     return () => {
@@ -136,13 +148,21 @@ export function SignalView() {
     () => ({ dataset, subject, contrast: task, processing: token }),
     [dataset, subject, task, token],
   );
+  // Carpet honours the band selector: "full" → raw broadband array; s5/s4/s* →
+  // the band-reconstructed carpet (backend timeseries.band_carpet).
+  const carpetParams: QueryParams = useMemo(
+    () => ({ dataset, subject, contrast: task, processing: token, band: carpetBand }),
+    [dataset, subject, task, token, carpetBand],
+  );
   const channelParams: QueryParams = useMemo(
     () => ({ dataset, subject, contrast: task, processing: token, channel }),
     [dataset, subject, task, token, channel],
   );
+  // Cohort spectrum: a non-empty subject pools only that subject's ROIs; ""
+  // (the URLSearchParams builder drops it) pools the whole cohort.
   const cohortParams: QueryParams = useMemo(
-    () => ({ dataset, contrast: task, processing: token, scheme }),
-    [dataset, task, token, scheme],
+    () => ({ dataset, contrast: task, processing: token, scheme, subject: cohortSubject || undefined }),
+    [dataset, task, token, scheme, cohortSubject],
   );
   // Band reconstruction also depends on the scheme (channel/EMD panels don't).
   const bandParams: QueryParams = useMemo(
@@ -230,6 +250,15 @@ export function SignalView() {
       ) : !ready ? null : effMode === "cohort" ? (
         <>
           <div className="subbar">
+            <label>
+              Subject
+              <select value={cohortSubject} onChange={(e) => setCohortSubject(e.target.value)}>
+                <option value="">All subjects (cohort)</option>
+                {cat.subjects.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
             <div className="seg">
               <span>y</span>
               <button className={!bandsYLog ? "active" : ""} onClick={() => setBandsYLog(false)}>linear</button>
@@ -239,16 +268,16 @@ export function SignalView() {
           <div className="plot-grid">
             <PlotPanel
               kind="cohort_bands"
-              title="IMF frequency spectrum (cohort)"
+              title={`IMF frequency spectrum (${cohortSubject || "cohort"})`}
               endpoint="signal"
               params={cohortParams}
               figureOptions={{ yLog: bandsYLog, variant: "freq" }}
-              caption="Every IMF's characteristic frequency — median instantaneous frequency (HHT), in Hz via the per-variant TR (bpf 1.353 s, optcom/MIR 0.98 s) — pooled across all subjects and ROIs. Bands: Canonical = the collaborator's fixed slow-oscillation edges (Slow-5 0.010–0.027, Slow-4 0.027–0.073, S* 0.073–0.180 Hz); Data-driven = geometric midpoints between the per-IMF-index clusters (dotted). First load runs EMD over the whole cohort (a few seconds)."
+              caption="Every IMF's characteristic frequency — median instantaneous frequency (HHT), in Hz via the per-variant TR (bpf 1.353 s, optcom/MIR 0.98 s) — pooled across ROIs (all subjects, or a single subject via the Subject selector). Bands: Canonical = the collaborator's fixed slow-oscillation edges (Slow-5 0.010–0.027, Slow-4 0.027–0.073, S* 0.073–0.180 Hz); Data-driven = geometric midpoints between the per-IMF-index clusters (dotted). First load runs EMD over the selection (a few seconds for the whole cohort)."
               wide
             />
             <PlotPanel
               kind="cohort_bands"
-              title="IMF period spectrum (cohort)"
+              title={`IMF period spectrum (${cohortSubject || "cohort"})`}
               endpoint="signal"
               params={cohortParams}
               figureOptions={{ yLog: bandsYLog, variant: "period" }}
@@ -275,15 +304,27 @@ export function SignalView() {
               <button className={normalize ? "active" : ""} onClick={() => setNormalize(true)}>z-score</button>
               <button className={!normalize ? "active" : ""} onClick={() => setNormalize(false)}>Raw</button>
             </div>
+            <label>
+              Band
+              <select value={carpetBand} onChange={(e) => setCarpetBand(e.target.value)}>
+                {CARPET_BANDS.map((b) => (
+                  <option key={b.value} value={b.value}>{b.label}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="plot-grid">
             <PlotPanel
               kind="signal_heatmap"
-              title="Timecourses (carpet)"
+              title={
+                carpetBand === "full"
+                  ? "Timecourses (carpet)"
+                  : `Timecourses (carpet) · ${CARPET_BANDS.find((b) => b.value === carpetBand)?.label}`
+              }
               endpoint="signal"
-              params={fileParams}
+              params={carpetParams}
               figureOptions={{ normalize }}
-              caption="Each row is one region; columns are timepoints. z-score normalises per region so temporal dynamics drive the grayscale. In Raw mode the scale spans every region's absolute level, so between-region baseline differences dominate and each row looks like a near-uniform stripe — switch to z-score to see within-region dynamics."
+              caption="Each row is one region; columns are timepoints. z-score normalises per region so temporal dynamics drive the grayscale. In Raw mode the scale spans every region's absolute level, so between-region baseline differences dominate and each row looks like a near-uniform stripe — switch to z-score to see within-region dynamics. The Band selector replaces each region's signal with the sum of its IMFs in that canonical band (Slow-5 0.010–0.027, Slow-4 0.027–0.073, S* 0.073–0.180 Hz) — the band-filtered carpet behind the per-band correlation matrices."
               wide
             />
           </div>

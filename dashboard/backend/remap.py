@@ -93,7 +93,11 @@ def surviving_coords(result) -> np.ndarray:
     coordinates.
     """
     survivors = survivor_indices(result.n_regions_original, result.dropped_regions)
-    coords = atlas_mod.parcel_centroids()  # Schaefer 100
-    if int(result.n_regions_original) != coords.shape[0]:
+    n = int(result.n_regions_original)
+    if n == 48:
+        coords = atlas_mod.harvard_oxford_centroids()  # HarvardOxford-48
+    else:
+        coords = atlas_mod.parcel_centroids()  # Schaefer 100
+    if n != coords.shape[0]:
         return np.empty((0, 3))
     return coords[survivors]

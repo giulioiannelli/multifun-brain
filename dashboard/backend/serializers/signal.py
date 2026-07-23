@@ -30,11 +30,13 @@ def _channel_name(ch: int, labels: list[str]) -> str:
     return labels[ch] if ch < len(labels) else f"region-{ch}"
 
 
-def heatmap_spec(ts: np.ndarray, names: list[str], **_) -> dict:
+def heatmap_spec(ts: np.ndarray, names: list[str], band: str = "full", **_) -> dict:
     """Carpet/grayplot payload: the full ``(n_regions, n_timepoints)`` matrix.
 
     Per-region normalisation (z-score) is applied client-side via a toggle, so
-    the raw values are shipped as-is (true values also drive the hover).
+    the raw values are shipped as-is (true values also drive the hover). ``band``
+    is ``"full"`` for the broadband carpet or a canonical band (``s5``/``s4``/
+    ``sstar``) when the matrix is band-reconstructed.
     """
     ts = np.asarray(ts, dtype=float)
     n_regions, n_timepoints = ts.shape
@@ -45,6 +47,7 @@ def heatmap_spec(ts: np.ndarray, names: list[str], **_) -> dict:
             "names": _names_for(n_regions, names),
             "n_regions": int(n_regions),
             "n_timepoints": int(n_timepoints),
+            "band": band or "full",
         }
     )
 
@@ -115,6 +118,7 @@ def cohort_bands_spec(cohort: dict, **_) -> dict:
             "kind": "cohort_bands",
             "contrast": cohort["contrast"],
             "processing": cohort["processing"],
+            "subject": cohort.get("subject"),
             "scheme": cohort.get("scheme_name", "canonical"),
             "units": "Hz",
             "sample_rate": float(cohort.get("sample_rate", 1.0)),

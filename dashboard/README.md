@@ -112,9 +112,12 @@ MFB_DASHBOARD_REBUILD=1 ./dashboard/run.sh    # force a frontend rebuild
 ## 4. Where the data has to go
 
 The dashboard reads **pre-computed result bundles** — the output of the analysis
-pipeline, not raw correlation matrices. (Dropping a raw-matrix folder and having
-the GUI elaborate it is a planned later phase; for now bundles are produced by
-the pipeline, e.g. `scripts/april/`.)
+pipeline. You normally never build these by hand: `python quickstart.py` detects
+each `raw_data_<id>` folder and **computes + caches** its bundles for you the
+first time (raw timecourses → EMD bands → correlation → pipeline; see
+`scripts/raw_ingest/`). This section documents the on-disk layout that ingest
+produces (and that a maintainer can also ship pre-computed), for when you need to
+know where things live.
 
 ### 4.1 Directory layout
 
@@ -173,10 +176,15 @@ data/schaefer_2018/
 ```
 
 Dead regions (NaN rows dropped during preprocessing) are remapped so hover names
-stay aligned with the surviving nodes — no action needed. The **Brain 3-D** tab
-derives parcel centroids from the NIfTI once (cached under `MFB_DASHBOARD_CACHE`)
-and renders an interactive nilearn connectome / markers view; it needs a
-WebGL-capable browser.
+stay aligned with the surviving nodes — no action needed. The **Brain 3-D** and
+**LRG glass-brain** tabs render nilearn's **interactive 3-D brain** (the rotatable
+translucent grey brain with coloured nodes and, for connectomes, edges), served as
+a self-contained page inside an `<iframe>` — drag to rotate, hover a node for its
+name. It needs a WebGL-capable browser. Parcel centroids are derived once and
+cached under `MFB_DASHBOARD_CACHE` for both atlases: Schaefer-100 (from the order
+NIfTI) and HarvardOxford-48 (from nilearn's bundled cortical atlas), so the brain
+renders for the HarvardOxford set too — its 48 parcels are bilateral, so their
+centroids sit near the mid-line.
 
 ### 4.4 Raw timecourses (the **Signal** tab)
 
@@ -277,6 +285,13 @@ cd dashboard/frontend && npm run dev      # http://localhost:5173
   Giulio's signed-descriptive → unsigned-filtering → LRG → metrics back end); a
   *Proposed* view shows the full CO₂-vs-rest comparison vision converging on the
   differential-node lens. Pure React/SVG/CSS, no backend (`views/PipelineView.tsx`).
-- **Planned**: interactive 3-D brain, comparison views (CO2 vs rest, per-patient
-  vs average, across variants/bands, two patients side by side), and the
-  drop-a-folder ingestion workflow. See the project plan for the roadmap.
+- **Done**: the **Brain** tabs — nilearn interactive 3-D connectome / markers brain
+  and the LRG partition glass brain, for both the Schaefer-100 and HarvardOxford-48
+  atlases.
+- **Done**: the **Compare** tab — CO₂ vs rest, per-patient vs average, across
+  variants / bands, two results side by side.
+- **Done**: the **drop-a-folder ingestion workflow** — `python quickstart.py`
+  detects each `raw_data_<id>` folder and computes + caches its result bundles
+  (`scripts/raw_ingest/`); see `../SETUP.md`.
+- **Planned**: the full CO₂-vs-rest differential-node lens (the *Proposed*
+  Pipeline view). See the project plan for the roadmap.

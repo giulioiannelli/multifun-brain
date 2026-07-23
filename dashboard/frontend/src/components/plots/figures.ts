@@ -644,6 +644,14 @@ export function buildSignalHeatmap(
   const names: string[] = spec.names ?? [];
   const showTicks = (spec.n_regions ?? names.length) <= 120;
   const normalize = opts.normalize ?? true;
+  const band = (spec.band as string) ?? "full";
+  const BAND_TITLE: Record<string, string> = {
+    full: "broadband",
+    s5: "Slow-5 · 0.010–0.027 Hz",
+    s4: "Slow-4 · 0.027–0.073 Hz",
+    sstar: "S* · 0.073–0.180 Hz",
+  };
+  const bandTag = band === "full" ? "" : ` · ${BAND_TITLE[band] ?? band}`;
 
   const trace: Record<string, any> = {
     type: "heatmap",
@@ -668,7 +676,7 @@ export function buildSignalHeatmap(
   return {
     data: [trace],
     layout: {
-      title: { text: `timecourses · ${spec.n_regions ?? names.length} regions × ${spec.n_timepoints ?? "?"} timepoints` },
+      title: { text: `timecourses${bandTag} · ${spec.n_regions ?? names.length} regions × ${spec.n_timepoints ?? "?"} timepoints` },
       // Taller when there are more regions so each row has room for a legible
       // tick label; automargin lets Plotly widen the left gutter to fit names.
       height: Math.min(1100, Math.max(520, (spec.n_regions ?? names.length) * 12)),
@@ -847,6 +855,7 @@ export function buildCohortBands(
   }
 
   const what = isPeriod ? "period" : "frequency";
+  const who = spec.subject ? String(spec.subject) : `${spec.n_subjects ?? "?"} subjects`;
   const xTitle = isPeriod ? "period (s)" : "characteristic frequency (Hz)";
   const hover = isPeriod
     ? "T ≈ %{x:.2f} s<br>count %{y}<extra></extra>"
@@ -865,7 +874,7 @@ export function buildCohortBands(
     ],
     layout: {
       title: {
-        text: `IMF ${what} spectrum · ${spec.contrast ?? ""} ${spec.processing ?? ""} · ${spec.n_subjects ?? "?"} subjects · ${scheme} bands`,
+        text: `IMF ${what} spectrum · ${spec.contrast ?? ""} ${spec.processing ?? ""} · ${who} · ${scheme} bands`,
       },
       height: 420,
       xaxis: { title: { text: xTitle } },

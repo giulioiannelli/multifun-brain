@@ -32,15 +32,17 @@ def signal_cohort_bands(
     processing: str,
     dataset: str = Query(default=""),
     scheme: str = Query(default="canonical"),
+    subject: str = Query(default=""),
 ) -> dict:
     """Cohort IMF-frequency histogram + the s5/s4/s* band ranges (Hz).
 
     Pools EMD over every ROI of every subject for ``(contrast, processing)`` —
     cached, but the first call takes a few seconds. ``scheme`` is ``canonical``
-    (fixed slow-oscillation edges, default) or ``data_driven``. Only meaningful
-    for datasets that have a contrast (the April set).
+    (fixed slow-oscillation edges, default) or ``data_driven``. A non-empty
+    ``subject`` restricts the pool to that one subject (per-subject spectrum);
+    omit it for the whole-cohort spectrum.
     """
-    cohort = timeseries.cohort_bands(dataset or None, contrast, processing, scheme)
+    cohort = timeseries.cohort_bands(dataset or None, contrast, processing, scheme, subject or "")
     if cohort is None:
         raise HTTPException(status_code=404, detail="no timecourses for this contrast/processing")
     return signal_ser.cohort_bands_spec(cohort)
@@ -56,12 +58,15 @@ def signal_plot(
     channel: int = Query(default=0),
     max_imfs: int = Query(default=10),
     scheme: str = Query(default="canonical"),
+    band: str = Query(default=""),
 ) -> dict:
     """Serialise *kind* for one raw-timecourse selection.
 
     ``kind`` matches the spec/builder name: ``signal_heatmap`` (carpet),
     ``signal_channel`` (single timecourse), ``signal_emd`` (IMF decomposition),
-    ``signal_bands`` (per-band reconstruction; honours ``scheme``).
+    ``signal_bands`` (per-band reconstruction; honours ``scheme``). For
+    ``signal_heatmap``, a non-empty ``band`` (``s5``/``s4``/``sstar``) shows the
+    band-reconstructed carpet instead of the raw broadband one.
     """
     ds = dataset or None
     names = timeseries.region_names(ds)
@@ -80,11 +85,18 @@ def signal_plot(
             raise HTTPException(status_code=404, detail="no band scheme for this selection")
         return signal_ser.band_reconstruction_spec(recon, names)
 
+    if kind == "signal_heatmap":
+        if band and band != "full":
+            ts = timeseries.band_carpet(ds, subject, contrast, processing, band)
+        else:
+            ts = timeseries.get_timecourses(ds, subject, contrast, processing)
+        if ts is None:
+            raise HTTPException(status_code=404, detail="unknown timecourse selection")
+        return signal_ser.heatmap_spec(ts, names, band=band or "full")
+
     ts = timeseries.get_timecourses(ds, subject, contrast, processing)
     if ts is None:
         raise HTTPException(status_code=404, detail="unknown timecourse selection")
-    if kind == "signal_heatmap":
-        return signal_ser.heatmap_spec(ts, names)
     if kind == "signal_channel":
         return signal_ser.channel_spec(ts, names, channel=channel)
     raise HTTPException(status_code=404, detail=f"unknown signal kind {kind!r}")

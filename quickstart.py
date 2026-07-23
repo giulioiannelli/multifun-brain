@@ -299,18 +299,23 @@ def ensure_bundles(
         "    This is the one slow step (EMD + LRG over every matrix): minutes to a\n"
         "    few hours per dataset, ONCE. Results are cached; later runs skip it."
     )
+    # Pass explicit raw + output paths (not just --dataset) so the ingest lands in
+    # the same place the inventory looked — correct for ./data AND --data /elsewhere.
+    def ingest_cmd(d: dict) -> list[str]:
+        return [
+            sys.executable, "-m", "scripts.raw_ingest.run_dataset",
+            "--raw-root", str(d["raw"]),
+            "--out", str(results_root / d["id"]),
+        ]
+
     if args.dry_run:
         for d in todo:
-            warn(f"would ingest: python -m scripts.raw_ingest.run_dataset --dataset {d['id']}")
+            warn("would ingest: " + " ".join(ingest_cmd(d)))
         return
     child_env = {**os.environ, **env}
     for d in todo:
         step(f"Ingesting {d['id']} ({d['n_subjects']} subjects) — this can take a while")
-        rc = run(
-            [sys.executable, "-m", "scripts.raw_ingest.run_dataset", "--dataset", d["id"]],
-            cwd=REPO_ROOT,
-            env=child_env,
-        )
+        rc = run(ingest_cmd(d), cwd=REPO_ROOT, env=child_env)
         if rc != 0:
             warn(f"ingest of {d['id']} failed (rc={rc}); continuing with the rest.")
         else:

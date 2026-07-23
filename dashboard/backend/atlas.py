@@ -106,3 +106,43 @@ def parcel_centroids() -> np.ndarray:
     cache.parent.mkdir(parents=True, exist_ok=True)
     np.save(cache, coords)
     return coords
+
+
+@lru_cache(maxsize=1)
+def harvard_oxford_centroids() -> np.ndarray:
+    """(48, 3) MNI centroids of the HarvardOxford cortical parcels, cached to disk.
+
+    Row ``i`` is the centre-of-mass of atlas label ``i + 1`` (0-based to match the
+    correlation-matrix row order), so identity is well-defined for the 3-D brain of
+    the 48-parcel set — the same standard FSL cortical atlas whose names
+    :func:`harvard_oxford_names` reads. The parcellation volume comes from nilearn's
+    bundled HarvardOxford atlas (``cort-maxprob-thr25-2mm``), fetched once and then
+    cached locally. Returns an empty ``(0, 3)`` array on any failure (atlas not
+    downloadable offline, a label missing after thresholding), so callers fall back
+    to the "centroids unavailable" message rather than misplacing nodes.
+    """
+    cache = config.CACHE_DIR / "harvardoxford_centroids.npy"
+    if cache.exists():
+        return np.load(cache)
+    try:
+        from nilearn import datasets
+
+        ho = datasets.fetch_atlas_harvard_oxford("cort-maxprob-thr25-2mm")
+        img = ho["maps"]
+        data = np.asarray(img.get_fdata()).astype(int)
+        affine = img.affine
+        n = 48
+        coords = np.full((n, 3), np.nan)
+        for label in range(1, n + 1):
+            vox = np.argwhere(data == label)
+            if vox.size == 0:
+                continue
+            center = np.append(vox.mean(axis=0), 1.0)
+            coords[label - 1] = (affine @ center)[:3]
+        if not np.isfinite(coords).all():
+            return np.empty((0, 3))  # a parcel vanished at this threshold — bail safely
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        np.save(cache, coords)
+        return coords
+    except Exception:  # noqa: BLE001 - offline / missing atlas must degrade, not crash
+        return np.empty((0, 3))
