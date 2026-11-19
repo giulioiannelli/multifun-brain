@@ -99,9 +99,15 @@ but new code should still prefer the canonical paths below.
 
 ### Visualization — `multifunbrain.visualization.plotlib`
 
-Largely unchanged from previous structure. Pipeline-specific plots live
-in `plotlib/pipeline_plots.py` (`plot_correlation_matrix`,
-`plot_lrg_entropy`, `plot_lrg_sankey`, etc.).
+One file per pipeline section, all re-exported from `plotlib/__init__.py`
+(import from the package, never from the section file):
+`descriptive.py` (correlation heatmap, spectrum, weights, signed Laplacian),
+`filtering.py` (percolation curve, filtered comparison), `network.py`
+(node metrics, network drawings), `lrg.py` (entropy / specific heat,
+dendrograms, PSI/RMI, partition flow, tanglegram), `grids.py`
+(`plot_results_grid`, `plot_pipeline_summary`), `sankey.py` (plotly +
+matplotlib backends). Shared boilerplate in `base.py`; palettes / sizes in
+`visualization/style.py`. Rules: `plotting.md`.
 
 ### Generation — `multifunbrain.generation`
 
