@@ -120,7 +120,7 @@ For "show the same plot for N results in a grid", the canonical helper
 is `multifunbrain.visualization.plotlib.plot_results_grid`:
 
 ```python
-from multifunbrain.visualization.plotlib.pipeline_plots import (
+from multifunbrain.visualization.plotlib import (
     plot_correlation_matrix,
     plot_results_grid,
 )
