@@ -13,6 +13,10 @@ Scope-based submodules (each function/class has one canonical home):
 - :mod:`multifunbrain.datasets`: dataset-specific loaders (April batch, etc.).
 - :mod:`multifunbrain.visualization`: plotting helpers.
 - :mod:`multifunbrain.generation`: synthetic-network generators.
+
+:mod:`multifunbrain.notebook` (wildcard convenience imports for Jupyter) is
+not imported here: it pulls optional heavy deps (``emd``, ``seaborn``). Use
+``from multifunbrain.notebook import *`` explicitly.
 """
 
 from __future__ import annotations
@@ -24,7 +28,6 @@ from . import (
     datasets,
     generation,
     io,
-    notebook,
     pipeline,
     preprocessing,
     processing,
@@ -61,7 +64,6 @@ __all__ = [
     "io",
     "load_results",
     "marchenko_pastur_density",
-    "notebook",
     "pipeline",
     "preprocessing",
     "processing",
