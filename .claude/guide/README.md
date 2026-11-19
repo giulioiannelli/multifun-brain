@@ -10,6 +10,7 @@ the answer evolves.
 - [`results-tracking.md`](results-tracking.md) — output layout, naming, config snapshots.
 - [`data-layout.md`](data-layout.md) — what's in `data/` (including the April batch).
 - [`module-map.md`](module-map.md) — "where does function X live?" reference table.
+- [`dashboard.md`](dashboard.md) — **the presentation layer**: backend serializer ↔ frontend figure contract, recipes for new plots/tabs, gotchas, how to verify in the running app.
 - [`plotting.md`](plotting.md) — visualization rules: where plot code lives, signature convention, multi-panel grids, notebook-handoff verification.
 
 If you find yourself adding content that's a *rule*, put it in

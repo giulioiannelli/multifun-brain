@@ -8,6 +8,9 @@ structure across multiple diffusion scales. The headline use-case is
 comparing **hypercapnia (CO2) vs resting-state** fMRI contrasts at
 multiple processing variants and frequency bands.
 
+**Results are presented in the dashboard** (`dashboard/`, FastAPI +
+React). Collaborators and the PI look at results there, not in notebooks.
+
 ## Quick map
 
 | Where | Purpose |
@@ -23,8 +26,11 @@ multiple processing variants and frequency bands.
 | `multifunbrain/pipeline/` | `PipelineConfig`, `PipelineResult`, runners, discovery |
 | `multifunbrain/visualization/plotlib/` | All plot functions |
 | `multifunbrain/generation/` | Synthetic-network generators |
+| `dashboard/` | **Presentation layer**: FastAPI backend (`backend/serializers/` → JSON specs) + React/Plotly/Cytoscape frontend |
+| `quickstart.py`, `SETUP.md` | One-command collaborator setup: detect raw data → ingest → build → serve |
+| `scripts/raw_ingest/` | Raw timecourses → EMD bands → correlation → pipeline bundles |
 | `scripts/april/` | Thin orchestration for the April batch (global → bands → patients) |
-| `notebooks/april/` | Presentation notebooks (load pre-computed results, plot, discuss) |
+| `notebooks/` | Personal scratch exploration only (`notebooks/april/` is legacy, stale data paths) |
 | `test/` | 62+ pytest tests |
 | `docs/` | API reference, usage, development guides (MkDocs) |
 | `data/` | gitignored; collaborator correlation matrices + atlases |
@@ -34,8 +40,9 @@ multiple processing variants and frequency bands.
 - **`.claude/CLAUDE.md`** — this file's full sibling; treat the two as
   the same document (root one is canonical, auto-loaded).
 - **`.claude/guide/`** — durable how-tos. Read before any non-trivial task.
-  - `best-practices.md`, `pipeline-usage.md`, `results-tracking.md`,
-    `data-layout.md`, `module-map.md`.
+  - `dashboard.md` (**read before touching `dashboard/`**), `best-practices.md`,
+    `pipeline-usage.md`, `results-tracking.md`, `data-layout.md`,
+    `module-map.md`, `plotting.md`.
 - **`.claude/never-always/`** — inviolable rules (`never.md`, `always.md`).
 - **`.claude/history/`** — append-only chronicle of architecture changes.
 - **`.claude/reports/`** — dated analytical reports.
@@ -64,23 +71,30 @@ multiple processing variants and frequency bands.
 ## Workflow norms
 
 - New analysis → script in `scripts/<topic>/` (thin, argparse, ≤80 lines).
-- New presentation → notebook in `notebooks/<topic>/`. Notebook loads
-  pre-computed `results.pkl` and calls library functions; **no analysis
-  logic inline**.
+- New presentation → **dashboard panel** (serializer in
+  `dashboard/backend/serializers/` + builder in
+  `dashboard/frontend/src/components/plots/`). Reusable computation goes
+  into `multifunbrain/` first. Recipes: `.claude/guide/dashboard.md`.
 - New library function → goes in the scope-based subpackage that fits.
   See `.claude/guide/module-map.md`.
 - Tests for new code in `test/test_<topic>.py`.
-- Run `pytest test/` + `ruff check multifunbrain/<new-paths>` before
-  declaring done.
+- Run `pytest test/` + `ruff check multifunbrain/ dashboard/backend/`
+  before declaring done; for frontend changes also `npx tsc --noEmit` +
+  `npm run build` in `dashboard/frontend/`, then look at it in the running
+  app. CI (`.github/workflows/ci.yml`) runs pytest + ruff on 3.10–3.12.
 
 ## Active context
 
-- **Branch**: `april-scaffold` (off `main`). Today's work is the
-  package reorganization + agent infrastructure + April-batch scaffold.
-- **April dataset** (`data/correlation_mat_april_data/`): 169 MB, 226
-  pickles. Stratified by 2 contrasts × 5 processing variants × 3 bands
-  × 3 aggregation levels (10 global / 30 per-band / 180 per-subject ×
-  band, 6 subjects). Loader at `multifunbrain.datasets.april`.
+- **Branching**: `main` is the integration branch; feature work on
+  short-lived branches → PR → merge when CI is green.
+- **Focus (2026-11)**: make the dashboard the complete presentation tool.
+  The Network tab (2-D graph, metrics, communities) is the weakest part
+  and the next target.
+- **Datasets**: result bundles under `data/correlation_matrices_results/`
+  — `schaefer100_april2026/`, `schaefer100_november2025/`,
+  `harvardoxford48/` — each with `global/`, `bands/`, `patients/`.
+  Raw timecourses in `data/raw_data_<atlas><batch>/`. April loader:
+  `multifunbrain.datasets.april`.
 - **Analysis order** (per Daniele / Giulio collaboration):
   global → bands → patients.
 

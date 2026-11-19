@@ -12,10 +12,17 @@
   calls into specific runs. One topic per subfolder
   (e.g. `scripts/april/`). Always include `argparse` + a guard
   `if __name__ == "__main__":` block.
-- **`notebooks/`** — visual/narrative presentation only. Load
-  pre-computed `results.pkl` via `load_results(...)`, plot, discuss. No
-  analysis logic. If you need a new plot, add it to
-  `multifunbrain/visualization/plotlib/` and call it from the notebook.
+- **`dashboard/`** — **the presentation layer.** FastAPI backend
+  serialises results into JSON plot specs; React frontend renders them.
+  Anything collaborators should see becomes a dashboard panel. See
+  [`dashboard.md`](dashboard.md).
+- **`notebooks/`** — personal scratch exploration only, not a
+  deliverable. No analysis logic; static plots come from
+  `multifunbrain/visualization/plotlib/`. The `notebooks/april/` set
+  predates the dashboard and its data paths are stale (results moved to
+  `data/correlation_matrices_results/schaefer100_april2026/`).
+- **`multifunbrain/cli.py`** — headless entry point (batch analysis,
+  ingest). Useful for agents and scripted runs; not a collaborator UI.
 
 ## Coding style
 
@@ -49,7 +56,10 @@
 
 ## Branching + commits
 
-- Feature work on a branch (e.g. `april-scaffold`). PR to `main` when verified.
+- Feature work on a short-lived branch off `main` (e.g. `dash-network-view`),
+  merged through a GitHub PR once CI is green and the change is verified.
+  `main` is the integration branch; there is no long-lived `dashboard`
+  branch any more.
 - Commit messages: imperative, short subject + descriptive body
   explaining *why*.
 - Never push to `main` directly. Never force-push to `main`.

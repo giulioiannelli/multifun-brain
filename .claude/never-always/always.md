@@ -103,3 +103,29 @@ future agents are stuck reverse-engineering intent.
 **How to apply:** When you finish a refactor, add
 `history/YYYY-MM-DD_<topic>.md` with: what changed, why, what
 back-compat measures exist, what's planned next.
+
+---
+
+## Always put new presentation in the dashboard
+
+**Why:** From 2026-11 on, collaborators and the PI look at results only in
+the dashboard GUI. A plot that exists only in a notebook is invisible to
+them.
+
+**How to apply:** A new figure, comparison or exploration becomes a
+dashboard panel (serializer + frontend builder, see
+`guide/dashboard.md`). Reusable computation goes into `multifunbrain/`
+first. Notebooks are for quick personal exploration only and are not a
+deliverable.
+
+---
+
+## Always verify a dashboard change in the running app
+
+**Why:** The user judges the dashboard by looking at it. Green tests have
+shipped panels that were empty, unreadable, or broken by WebGL.
+
+**How to apply:** Run tests + `ruff` + `tsc` + `npm run build`, serve on a
+free port, curl the endpoint, then open the tab in a browser, exercise the
+control and check the console. Report what you saw; if no browser was
+available, say so. Procedure: `guide/dashboard.md` § "Verify a change".
