@@ -49,6 +49,11 @@ docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.5",
 ]
+dashboard = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "emd>=0.6",  # Empirical Mode Decomposition for the Signal tab (IMF panel)
+]
 viz = [
     "plotly>=5.0",
     "matplotlib>=3.6",
@@ -56,10 +61,10 @@ viz = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/multifun-brain"
-Documentation = "https://github.com/your-org/multifun-brain/tree/main/docs"
-Source = "https://github.com/your-org/multifun-brain"
-Issues = "https://github.com/your-org/multifun-brain/issues"
+Homepage = "https://github.com/giulioiannelli/multifun-brain"
+Documentation = "https://github.com/giulioiannelli/multifun-brain/tree/main/docs"
+Source = "https://github.com/giulioiannelli/multifun-brain"
+Issues = "https://github.com/giulioiannelli/multifun-brain/issues"
 
 [project.scripts]
 multifunbrain = "multifunbrain.cli:main"

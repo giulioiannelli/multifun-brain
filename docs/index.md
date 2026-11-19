@@ -19,8 +19,8 @@ served as a website with MkDocs.
 - **Package name:** `multifunbrain`
 - **Python versions:** 3.9 – 3.12
 - **License:** MIT
-- **Source code:** <https://github.com/your-org/multifun-brain>
-- **Issue tracker:** <https://github.com/your-org/multifun-brain/issues>
+- **Source code:** <https://github.com/giulioiannelli/multifun-brain>
+- **Issue tracker:** <https://github.com/giulioiannelli/multifun-brain/issues>
 
 ## Building the documentation site
 

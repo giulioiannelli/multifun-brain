@@ -23,7 +23,7 @@ Heavy visualisation libraries are optional to keep the base install lightweight.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/multifun-brain.git
+   git clone https://github.com/giulioiannelli/multifun-brain.git
    cd multifun-brain
    ```
 2. Install in editable mode together with the development extras:

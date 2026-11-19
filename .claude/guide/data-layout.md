@@ -10,7 +10,9 @@ intentional action).
 
 ```
 data/
-├── atlas_timecourses/                       # raw fMRI time-series (private)
+├── raw_data_schaefer100_april2026/          # raw .ts.1D time-series — Schaefer 100, BIDS scheme (Signal-tab default)
+├── raw_data_schaefer100_november2025/       # raw .ts.1D — Schaefer 100, Nov 2025, AFNI `kw…` scheme (was atlas_timecourses_Schaefer)
+├── raw_data_harvardoxford48/                # raw .ts.1D — HarvardOxford 48, AFNI `kw…` scheme (was atlas_timecourses)
 ├── correlation_matrices/                    # older / baseline batch (per-contrast variants)
 ├── correlation_matrices_old/                # archived earlier version
 ├── correlation_matrices_results/            # pipeline outputs

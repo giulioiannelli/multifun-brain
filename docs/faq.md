@@ -15,7 +15,7 @@ with NetworkX or NumPy and feeding them into the provided analysis utilities.
 
 ```
 Multifun-Brain Developers. (2024). multifun-brain (Version 0.2.0) [Computer software].
-https://github.com/your-org/multifun-brain
+https://github.com/giulioiannelli/multifun-brain
 ```
 
 ## Where are the examples?
@@ -26,7 +26,7 @@ extra: `pip install "multifunbrain[viz]"`.
 
 ## I found a bug. What now?
 
-1. Search the [issue tracker](https://github.com/your-org/multifun-brain/issues)
+1. Search the [issue tracker](https://github.com/giulioiannelli/multifun-brain/issues)
    to avoid duplicates.
 2. If the issue is new, open a report using the provided template. Include
    Python version, operating system, and steps to reproduce the problem.
