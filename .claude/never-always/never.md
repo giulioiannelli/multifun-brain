@@ -146,6 +146,21 @@ changes, and bury logic where tests can't reach it.
 **How to apply:** Plot patterns belong in
 `multifunbrain.visualization.plotlib.*`. The canonical multi-panel
 helper is `plot_results_grid` — use it instead of writing loops in a
-notebook. New plot patterns get a helper added to `pipeline_plots.py`
-first, then a one-line call from the notebook. See
+notebook. New plot patterns get a helper added to the matching
+`plotlib/<section>.py` file first, then a one-line call from the notebook. See
 `.claude/guide/plotting.md` for the full rule set.
+
+---
+
+## Never replace the nilearn interactive 3-D brain
+
+**Why:** On 2026-07-23 both 3-D brains were rewritten as a Plotly
+`scatter3d` with click-to-pin labels. The user rejected it: floating dots
+with no brain mesh and no edges, and it needed WebGL, which broke on their
+machine. A 2-D projection fallback and a server-rendered glass-brain PNG
+were rejected too. Everything was reverted.
+
+**How to apply:** Brain views use nilearn `view_connectome` /
+`view_markers` → `get_standalone()` HTML in an `<iframe>`
+(`dashboard/backend/brain3d.py`, `glassbrain.py`). Add features around it
+(selectors, side panels, linked tables), not instead of it.
